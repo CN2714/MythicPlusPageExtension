@@ -26,7 +26,7 @@ MythicPlusPageExtension:SetScript("OnEvent", function(self, event, addonName)
             ScoreNTeleport_ScoreColorStyle = "highestlv",
             ScoreNTeleport_EnableTeleport = true,
             ScoreNTeleport_SendTeleportInfo = true,
-            ScoreNTeleport_STI_CastStatu = "castsucceeded",
+            ScoreNTeleport_STI_CastStatus = "castsucceeded",
             ScoreNTeleport_UseOldStyle = false,
             ScoreNTeleport_DunShortName_FontSize = 13,
             ScoreNTeleport_DunShortName_PerLine = 7,

@@ -249,11 +249,11 @@ mppe.SendTeleportInfo_eventFrame:SetScript("OnEvent", function(self, event, unit
     if not MythicPlusPageExtensionDB.ScoreNTeleport_Enable or not MythicPlusPageExtensionDB.ScoreNTeleport_SendTeleportInfo then return end
     if (unitTarget ~= "player") or (not spellID) or (not TpIdToDunID[spellID]) then return end
 
-    if MythicPlusPageExtensionDB.ScoreNTeleport_STI_CastStatu == "caststart" and event == "UNIT_SPELLCAST_START" then
+    if MythicPlusPageExtensionDB.ScoreNTeleport_STI_CastStatus == "caststart" and event == "UNIT_SPELLCAST_START" then
         local dunName = C_ChallengeMode.GetMapUIInfo(TpIdToDunID[spellID]) or "unknown"
         if IsInGroup() then C_ChatInfo.SendChatMessage("[MPPE]"..string.format(mppe.Translate['Activating teleport %s, destination set to [%s]!'],C_Spell.GetSpellLink(spellID),dunName), IsInRaid() and "RAID" or "PARTY") end
 
-    elseif MythicPlusPageExtensionDB.ScoreNTeleport_STI_CastStatu == "castsucceeded" and event == "UNIT_SPELLCAST_SUCCEEDED" then 
+    elseif MythicPlusPageExtensionDB.ScoreNTeleport_STI_CastStatus == "castsucceeded" and event == "UNIT_SPELLCAST_SUCCEEDED" then 
         local dunName = C_ChallengeMode.GetMapUIInfo(TpIdToDunID[spellID]) or "unknown"
         if IsInGroup() then C_ChatInfo.SendChatMessage("[MPPE]"..string.format(mppe.Translate['Teleport %s completed, arrived at destination [%s]!'],C_Spell.GetSpellLink(spellID),dunName), IsInRaid() and "RAID" or "PARTY") end
     end  

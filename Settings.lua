@@ -85,7 +85,7 @@ function settings_Tabs:CreateTab(tabName, tabContentFrame)
     
     -- 创建标签按钮
     local tabButton = CreateFrame("Button", "MPPE_TabButton"..tabID, self.tabButtons)
-    tabButton:SetSize(150, 25)
+    tabButton:SetSize(150, 25)  -- 初始尺寸，创建全部标签后由 LayoutTabButtons 均分重排
     
     -- 设置位置
     if tabID == 1 then
@@ -175,10 +175,10 @@ end
 
 --==================================================================
 settings_Tabs.SettingsList = {
-    [1] = {
+    {
         tabName = "Score&Teleport",
         tabList = {
-            [1] = {
+            {
                 db = "ScoreNTeleport_Enable",
                 name = "Enable",
                 type = "CheckBox", 
@@ -187,13 +187,13 @@ settings_Tabs.SettingsList = {
                     default = true,
                 }
             },
-            [2] = {
+            {
                 name = "↑Disabling this feature requires a UI reload (/reload) to take effect.",
                 type = "Label", 
                 indent = 0,
                 lines = 1
             },
-            [3] = {
+            {
                 db = "ScoreNTeleport_TryClearOther",
                 name = "Try to clear other non-native content on dungeon icon(excluding this addon).",
                 type = "CheckBox", 
@@ -202,7 +202,7 @@ settings_Tabs.SettingsList = {
                     default = true,
                 }
             },
-            [4] = {
+            {
                 db = "ScoreNTeleport_ScoreColorStyle",
                 name = "Score Text Color Style",
                 type = "ComboBox", 
@@ -212,7 +212,7 @@ settings_Tabs.SettingsList = {
                     list = {["highestlv"] = "Match Highest Level", ["raiderio"] = "RaiderIO Style", ["standard"] = "Standard Style"}
                 }
             },
-            [5] = {
+            {
                 db = "ScoreNTeleport_EnableTeleport",
                 name = "Enable click-to-use teleport(separate toggle to avoid conflict with other addons; does not affect other functions).",
                 type = "CheckBox", 
@@ -221,7 +221,7 @@ settings_Tabs.SettingsList = {
                     default = true,
                 }
             },
-            [6] = {
+            {
                 db = "ScoreNTeleport_SendTeleportInfo",
                 name = "Send a message to the party channel after using teleport.",
                 type = "CheckBox", 
@@ -230,8 +230,8 @@ settings_Tabs.SettingsList = {
                     default = true,
                 }
             },
-            [7] = {
-                db = "ScoreNTeleport_STI_CastStatu",
+            {
+                db = "ScoreNTeleport_STI_CastStatus",
                 name = "Send message when",
                 type = "ComboBox", 
                 indent = 2,
@@ -240,7 +240,7 @@ settings_Tabs.SettingsList = {
                     list = {["caststart"] = "Teleport Start", ["castsucceeded"] = "Teleport Complete"}
                 }
             },
-            [8] = {
+            {
                 db = "ScoreNTeleport_UseOldStyle",
                 name = "Use Original Style (WA:ud2YBS4WC)",
                 type = "CheckBox", 
@@ -249,7 +249,7 @@ settings_Tabs.SettingsList = {
                     default = false,
                 }
             },
-            [9] = {
+            {
                 db = "ScoreNTeleport_DunShortName_FontSize",
                 name = "Dungeon Shortname Font Size",
                 type = "Slider", 
@@ -261,7 +261,7 @@ settings_Tabs.SettingsList = {
                     step = 0.1
                 }
             },
-            [10] = {
+            {
                 db = "ScoreNTeleport_DunShortName_PerLine",
                 name = "The number of characters per line of the Dungeon Shortname",
                 type = "Slider", 
@@ -273,7 +273,7 @@ settings_Tabs.SettingsList = {
                     step = 1
                 }
             },
-            [11] = {
+            {
                 db = "ScoreNTeleport_DunLevel_FontSize",
                 name = "Dungeon Highest Level Font Size",
                 type = "Slider", 
@@ -285,7 +285,7 @@ settings_Tabs.SettingsList = {
                     step = 0.1
                 }
             },
-            [12] = {
+            {
                 db = "ScoreNTeleport_DunScore_FontSize",
                 name = "Dungeon Highest Score Font Size",
                 type = "Slider", 
@@ -299,10 +299,10 @@ settings_Tabs.SettingsList = {
             },
         }
     },
-    [2] = {
+    {
         tabName = "PartyInfo",
         tabList = {
-            [1] = {
+            {
                 db = "PartyKeyStone_Enable",
                 name = "Enable",
                 type = "CheckBox", 
@@ -311,7 +311,7 @@ settings_Tabs.SettingsList = {
                     default = true,
                 }
             },
-            [2] = {
+            {
                 db = "PartyKeyStone_ScoreColorStyle",
                 name = "Score Text Color Style",
                 type = "ComboBox", 
@@ -321,7 +321,7 @@ settings_Tabs.SettingsList = {
                     list = {["raiderio"] = "RaiderIO Style", ["standard"] = "Standard Style"}
                 }
             },
-            [3] = {
+            {
                 db = "PartyKeyStone_xOffset",
                 name = "X Offset",
                 type = "Slider", 
@@ -333,7 +333,7 @@ settings_Tabs.SettingsList = {
                     step = 0.1
                 }
             },
-            [4] = {
+            {
                 db = "PartyKeyStone_yOffset",
                 name = "Y Offset",
                 type = "Slider", 
@@ -347,10 +347,10 @@ settings_Tabs.SettingsList = {
             }
         }
     },
-    [3] = {
+    {
         tabName = "WeeklyReport",
         tabList = {
-            [1] = {
+            {
                 db = "WeeklyReport_Enable",
                 name = "Enable",
                 type = "CheckBox", 
@@ -359,7 +359,7 @@ settings_Tabs.SettingsList = {
                     default = true,
                 }
             },
-            -- [2] = {
+            -- {
             --     db = "WeeklyReport_FrameStyle",
             --     name = "周报窗口样式",
             --     type = "ComboBox", 
@@ -369,7 +369,7 @@ settings_Tabs.SettingsList = {
             --         list = {["accordion"] = "Accordion Style", ["standard"] = "Standard Style"}
             --     }
             -- },
-            [2] = {
+            {
                 db = "WeeklyReport_HideRaiderIOFrame",
                 name = "Hide RaiderIO Frame When Mythic+ Page Opens.",
                 type = "CheckBox", 
@@ -378,7 +378,7 @@ settings_Tabs.SettingsList = {
                     default = true,
                 }
             },
-            [3] = {
+            {
                 db = "WeeklyReport_ShowWeeklyTOP8",
                 name = "Show Weekly Top8 Report",
                 type = "CheckBox", 
@@ -387,7 +387,7 @@ settings_Tabs.SettingsList = {
                     default = true,
                 }
             },
-            [4] = {
+            {
                 db = "WeeklyReport_FontSize",
                 name = "Weekly Report Font Size",
                 type = "Slider", 
@@ -399,7 +399,7 @@ settings_Tabs.SettingsList = {
                     step = 0.1
                 }
             },
-            [5] = {
+            {
                 db = "WeeklyReport_FrameWidth",
                 name = "Weekly Report Frame Width",
                 type = "Slider", 
@@ -411,7 +411,7 @@ settings_Tabs.SettingsList = {
                     step = 1
                 }
             },
-            [6] = {
+            {
                 db = "WeeklyReport_FrameHeightCorrection",
                 name = "Weekly Report Frame Height Correction(Fix misalignment and height discrepancies caused by UI scaling.)",
                 type = "Slider", 
@@ -426,196 +426,216 @@ settings_Tabs.SettingsList = {
         }
     },
 }
+--==================================================================
+-- 设置页布局常量
+local SETTINGS_PAGE_WIDTH = 500   -- 设置页宽度
+local SETTINGS_COLUMN_WIDTH = 400 -- 标题列基准宽度
+local SETTINGS_OVERHANG_WIDTH = 600 -- 说明文字/勾选框标题的加宽基准（沿用旧布局，避免视觉回归）
+
+-- 从数据库读取设置项的值；类型不符时回退到配置默认值
+local function GetDBValue(item, expectedType, fallback)
+    local _value = MythicPlusPageExtensionDB[item.db]
+    if type(_value) ~= expectedType then
+        _value = (type(item.value.default) == expectedType) and item.value.default or fallback
+    end
+    return _value
+end
+
+-- 解析下拉框最终选中键：数据库值 -> 配置默认值 -> 列表第一项
+local function ResolveComboKey(item)
+    if not item.value.list then return nil end
+    local _dbValue = MythicPlusPageExtensionDB[item.db]
+    if _dbValue and item.value.list[_dbValue] then return _dbValue end
+    local _default = item.value.default
+    if _default and item.value.list[_default] then return _default end
+    return next(item.value.list)
+end
+
+-- 创建通用的设置项标题文本（parent 为标签页，top 为相对顶部的偏移量）
+local function CreateItemTitle(parent, text, leftmargin, top, width, layer)
+    local _title = parent:CreateFontString(nil, layer or "ARTWORK", "GameFontHighlightSmall")
+    _title:SetPoint("TOPLEFT", leftmargin, top)
+    _title:SetText(text)
+    _title:SetHeight(32)
+    _title:SetWidth(width)
+    _title:SetJustifyH("LEFT")
+    _title:SetJustifyV("MIDDLE")
+    return _title
+end
+
+-- 创建滑块的步进按钮（+/-），点击使滑块增减 delta
+local function CreateStepButton(parent, slider, dbKey, delta, atlas)
+    local _suffix = delta > 0 and "Plus" or "Minus"
+    local _btn = CreateFrame("Button", "MPPE_Setting_"..dbKey.."_".._suffix, parent)
+    _btn:SetSize(10, 10)
+    if delta > 0 then
+        _btn:SetPoint("LEFT", slider, "RIGHT", 1, 0)
+    else
+        _btn:SetPoint("RIGHT", slider, "LEFT", -1, 0)
+    end
+    _btn.Icon = _btn:CreateTexture(nil, "OVERLAY")
+    _btn.Icon:SetAllPoints()
+    _btn.Icon:SetAtlas(atlas)
+    _btn:SetScript("OnEnter", function(self) self.Icon:SetVertexColor(1, 0.5, 0) end)
+    _btn:SetScript("OnLeave", function(self) self.Icon:SetVertexColor(1, 1, 1) end)
+    _btn:SetScript("OnClick", function() slider:SetValue(slider:GetValue() + delta) end)
+    return _btn
+end
+
+-- 构建"说明文字"设置项
+local function BuildLabel(parent, item, itemName, leftmargin, tabHeight)
+    local _label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    _label:SetText(itemName)
+    _label:SetPoint("TOPLEFT", parent, "TOPLEFT", leftmargin, -tabHeight)
+    _label:SetSize(SETTINGS_OVERHANG_WIDTH - 12, (item.lines and item.lines or 1) * 15)
+    _label:SetJustifyH("LEFT")
+    _label:SetJustifyV("TOP")
+    return tabHeight + _label:GetHeight() + 10
+end
+
+-- 构建"勾选框"设置项
+local function BuildCheckBox(parent, item, itemName, leftmargin, tabHeight)
+    local _title = CreateItemTitle(parent, itemName, leftmargin + 24, -tabHeight - 5, SETTINGS_OVERHANG_WIDTH - 36, "OVERLAY")
+    local _checkBox = CreateFrame("CheckButton", "MPPE_Setting_"..item.db, parent, "ChatConfigCheckButtonTemplate")
+    _checkBox:SetSize(24, 24)
+    _checkBox:SetPoint("RIGHT", _title, "LEFT", 0, 0)
+    _checkBox:SetChecked(GetDBValue(item, "boolean", false))
+    _checkBox:SetScript("OnClick", function(self)
+        MythicPlusPageExtensionDB[item.db] = self:GetChecked()
+    end)
+    return tabHeight + _checkBox:GetHeight() + 10 + 12
+end
+
+-- 构建"滑块"设置项
+local function BuildSlider(parent, item, itemName, leftmargin, tabHeight)
+    local _title = CreateItemTitle(parent, itemName, leftmargin, -tabHeight - 5, SETTINGS_COLUMN_WIDTH - leftmargin)
+    local _slider = CreateFrame("Slider", "MPPE_Setting_"..item.db, parent, "OptionsSliderTemplate")
+    _slider:SetSize(180, 17)
+    _slider:SetPoint("LEFT", _title, "RIGHT", 15, 0)
+    _slider:SetMinMaxValues(item.value.min or 0, item.value.max or 100)
+    _slider.Low:SetText(item.value.min or 0)
+    _slider.High:SetText(item.value.max or 100)
+
+    if type(item.value.step) ~= "number" or item.value.step <= 0 then item.value.step = 1 end
+    _slider:SetValueStep(item.value.step)
+    local _str = tostring(mppe.MathRound(item.value.step, 3))
+    local _dec = _str:match("%.(%d+)")
+    local _decimalPlace = _dec and math.min(#_dec, 3) or 0
+
+    _slider:SetValue(GetDBValue(item, "number", 50))
+    _slider.Text:SetText(mppe.MathRound(_slider:GetValue(), _decimalPlace))
+    _slider:SetScript("OnValueChanged", function(self, value)
+        self.Text:SetText(mppe.MathRound(value, _decimalPlace))
+        MythicPlusPageExtensionDB[item.db] = mppe.MathRound(value, _decimalPlace)
+    end)
+
+    CreateStepButton(parent, _slider, item.db, item.value.step, "common-icon-plus")
+    CreateStepButton(parent, _slider, item.db, -item.value.step, "common-icon-minus")
+    return tabHeight + _title:GetHeight() + 20
+end
+
+-- 构建"下拉框"设置项
+local function BuildComboBox(parent, item, itemName, leftmargin, tabHeight)
+    local _title = CreateItemTitle(parent, itemName, leftmargin, -tabHeight, SETTINGS_COLUMN_WIDTH - leftmargin)
+    local _comboBox = CreateFrame("Frame", "MPPE_Setting_"..item.db, parent, "UIDropDownMenuTemplate")
+    _comboBox:SetSize(165, 32)
+    _comboBox:SetPoint("LEFT", _title, "RIGHT", -5, 0)
+    UIDropDownMenu_SetWidth(_comboBox, 175)
+
+    -- 下拉菜单初始化（UIDropDownMenu 会传入多余参数，忽略即可）
+    local function initializeDropDown()
+        local _info = UIDropDownMenu_CreateInfo()
+        local _currentValue = MythicPlusPageExtensionDB[item.db]
+        for _key, _displayText in pairs(item.value.list or {}) do
+            _info.text = "  "..(Translate[_displayText] or _key)
+            _info.value = _key
+            _info.checked = (_currentValue == _key)
+            _info.func = function(button)
+                UIDropDownMenu_SetSelectedValue(_comboBox, button.value)
+                UIDropDownMenu_SetText(_comboBox, button:GetText())
+                MythicPlusPageExtensionDB[item.db] = button.value
+                CloseDropDownMenus()
+            end
+            UIDropDownMenu_AddButton(_info)
+        end
+    end
+    UIDropDownMenu_Initialize(_comboBox, initializeDropDown)
+
+    -- 应用最终选中键（修复：旧代码 ipairs 在首个 nil 处中断，导致默认值被跳过的 bug）
+    local _finalKey = ResolveComboKey(item)
+    if _finalKey then
+        UIDropDownMenu_SetText(_comboBox, Translate[item.value.list[_finalKey]] or item.value.list[_finalKey])
+        UIDropDownMenu_SetSelectedValue(_comboBox, _finalKey)
+        MythicPlusPageExtensionDB[item.db] = _finalKey
+    else
+        UIDropDownMenu_SetText(_comboBox, "- WRONG -")
+    end
+    return tabHeight + _title:GetHeight() + 10
+end
+
+-- 构建"文本输入"设置项
+local function BuildTextBox(parent, item, itemName, leftmargin, tabHeight)
+    local _title = CreateItemTitle(parent, itemName, leftmargin, -tabHeight, SETTINGS_COLUMN_WIDTH - leftmargin)
+    local _textBox = CreateFrame("EditBox", "MPPE_Setting_"..item.db, parent, "InputBoxTemplate")
+    _textBox:SetSize(185, 32)
+    _textBox:SetAutoFocus(false)
+    _textBox:SetPoint("LEFT", _title, "RIGHT", 15, 0)
+    _textBox:SetText(MythicPlusPageExtensionDB[item.db] or item.value.default or "")
+    _textBox:SetScript("OnTextChanged", function(self)
+        MythicPlusPageExtensionDB[item.db] = self:GetText()
+    end)
+    return tabHeight + _title:GetHeight() + 20
+end
+
+-- 设置项构建器分发表：控件类型 -> 构建函数
+local widgetBuilders = {
+    Label = BuildLabel,
+    CheckBox = BuildCheckBox,
+    Slider = BuildSlider,
+    ComboBox = BuildComboBox,
+    TextBox = BuildTextBox,
+}
+
+-- 按容器宽度均分标签按钮宽度（预留新增 tab 的空间，防止溢出）
+local function LayoutTabButtons()
+    local _count = #settings_Tabs.tabs
+    if _count == 0 then return end
+    local _avail = (settings_Tabs.tabButtons:GetWidth() or 550) - 20 - (_count - 1) * 3
+    if _avail < 50 then _avail = 50 end
+    local _width = math.floor(_avail / _count)
+    for _i = 1, _count do
+        settings_Tabs.tabs[_i].button:SetWidth(_width)
+    end
+end
+
+-- 创建标签页内容（遍历 SettingsList 构建各标签页）
 function settings_Tabs:CreateTabContext()
-    for i, content in ipairs(settings_Tabs.SettingsList) do
-        local _tabName = Translate[content.tabName] or "TabPage_"..tostring(i)
-        local _tabPage = CreateFrame("Frame", "MPPE_SettingsTabPage_"..tostring(i))
-        _tabPage:SetSize(500, 1500) 
+    for _tabIndex, _tabCfg in ipairs(settings_Tabs.SettingsList) do
+        local _tabName = Translate[_tabCfg.tabName] or ("TabPage_"..tostring(_tabIndex))
+        local _tabPage = CreateFrame("Frame", "MPPE_SettingsTabPage_"..tostring(_tabIndex))
+        _tabPage:SetWidth(SETTINGS_PAGE_WIDTH)
 
         local _tabHeight = 5
-        for j, item in ipairs(content.tabList) do
-            local itemName = Translate[item.name] or item.name or "Item_"..tostring(j)
-            local leftmargin = 5 + (type(item.indent) == "number" and item.indent or 0) * 20
-            if item.type == "Label" then
-                local label = _tabPage:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                label:SetText(itemName)
-                label:SetPoint("TOPLEFT", _tabPage, "TOPLEFT", leftmargin, -_tabHeight)
-                label:SetSize(600-12, (item.lines and item.lines or 1) * 15)
-                label:SetJustifyH("LEFT")
-                label:SetJustifyV("TOP")
-
-                _tabHeight = _tabHeight + label:GetHeight() + 10             
-            elseif item.type == "CheckBox" then
-                local checkBoxTitle = _tabPage:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-                checkBoxTitle:SetPoint("TOPLEFT", leftmargin + 24, -_tabHeight - 5)
-                checkBoxTitle:SetText(itemName)
-                checkBoxTitle:SetHeight(32)
-                checkBoxTitle:SetWidth(600-36)
-                checkBoxTitle:SetJustifyH("LEFT")
-                checkBoxTitle:SetJustifyV("MIDDLE")
-                local checkBox = CreateFrame("CheckButton", "MPPE_Setting_"..item.db, _tabPage, "ChatConfigCheckButtonTemplate")
-                checkBox:SetSize(24, 24)
-                checkBox:SetPoint("RIGHT", checkBoxTitle, "LEFT", 0, 0)
-
-                                
-                local _value = MythicPlusPageExtensionDB[item.db]
-                if type(_value) ~= "boolean" then _value = (type(item.value.default) == "boolean") and item.value.default or false end
-                checkBox:SetChecked(_value)
-                checkBox:SetScript("OnClick", function(self)
-                    MythicPlusPageExtensionDB[item.db] = self:GetChecked()
-                end)
-
-                _tabHeight = _tabHeight + checkBox:GetHeight() + 10 +12
-            elseif item.type == "Slider" then
-                local sliderTitle = _tabPage:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall") 
-                sliderTitle:SetPoint("TOPLEFT", leftmargin, -_tabHeight - 5)
-                sliderTitle:SetText(itemName)
-                sliderTitle:SetHeight(32)
-                sliderTitle:SetWidth(400 - leftmargin)
-                sliderTitle:SetJustifyH("LEFT")
-                sliderTitle:SetJustifyV("MIDDLE")
-                local slider = CreateFrame("Slider", "MPPE_Setting_"..item.db, _tabPage, "OptionsSliderTemplate")
-                slider:SetSize(180, 17)
-                slider:SetPoint("LEFT", sliderTitle, "RIGHT", 15, 0)
-                slider:SetMinMaxValues(item.value.min or 0, item.value.max or 100)
-                slider.Low:SetText(item.value.min or 0)
-                slider.High:SetText(item.value.max or 100)
-                
-                if type(item.value.step) ~= "number" or item.value.step <= 0 then item.value.step = 1 end
-                slider:SetValueStep(item.value.step)
-                local str = tostring(mppe.MathRound(item.value.step, 3))
-                local dec = str:match("%.(%d+)")
-                local _decimalPlace = dec and math.min(#dec, 3) or 0
-                
-                local _value = MythicPlusPageExtensionDB[item.db]
-                if type(_value) ~= "number" then _value = (type(item.value.default) == "number") and item.value.default or 50 end
-                slider:SetValue(_value)
-                slider.Text:SetText(mppe.MathRound(slider:GetValue(), _decimalPlace))
-                slider:SetScript("OnValueChanged", function(self, value)
-                    self.Text:SetText(mppe.MathRound(value, _decimalPlace))
-                    MythicPlusPageExtensionDB[item.db] = mppe.MathRound(value, _decimalPlace)                                     
-                end)
-                
-                local sliderPlusBtn = CreateFrame("Button", "MPPE_Setting_"..item.db.."_Plus", _tabPage)
-                sliderPlusBtn:SetSize(10,10)
-                sliderPlusBtn:SetPoint("LEFT", slider, "RIGHT", 1, 0)
-                sliderPlusBtn.Icon = sliderPlusBtn:CreateTexture(nil, "OVERLAY")
-                sliderPlusBtn.Icon:SetAllPoints()
-                sliderPlusBtn.Icon:SetAtlas("common-icon-plus")
-                sliderPlusBtn:SetScript("OnEnter", function(self)
-                    self.Icon:SetVertexColor(1, 0.5, 0)
-                end)
-                sliderPlusBtn:SetScript("OnLeave", function(self)
-                    self.Icon:SetVertexColor(1, 1, 1)
-                end)
-                sliderPlusBtn:SetScript("OnClick", function()
-                    slider:SetValue(slider:GetValue() + item.value.step)
-                end)
-
-                local sliderMinusBtn = CreateFrame("Button", "MPPE_Setting_"..item.db.."_Minus", _tabPage)
-                sliderMinusBtn:SetSize(10,10)
-                sliderMinusBtn:SetPoint("RIGHT", slider, "LEFT", -1, 0)
-                sliderMinusBtn.Icon = sliderMinusBtn:CreateTexture(nil, "OVERLAY")
-                sliderMinusBtn.Icon:SetAllPoints()
-                sliderMinusBtn.Icon:SetAtlas("common-icon-minus")
-                sliderMinusBtn:SetScript("OnEnter", function(self)
-                    self.Icon:SetVertexColor(1, 0.5, 0)
-                end)
-                sliderMinusBtn:SetScript("OnLeave", function(self)
-                    self.Icon:SetVertexColor(1, 1, 1)
-                end)
-                sliderMinusBtn:SetScript("OnClick", function()
-                    slider:SetValue(slider:GetValue() - item.value.step)
-                end)
-
-                _tabHeight = _tabHeight + sliderTitle:GetHeight() + 20 -- 补一个间距    
-            elseif item.type == "ComboBox" then
-                local comboBoxTitle = _tabPage:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-                comboBoxTitle:SetPoint("TOPLEFT", leftmargin, -_tabHeight)
-                comboBoxTitle:SetText(itemName)
-                comboBoxTitle:SetHeight(32)
-                comboBoxTitle:SetWidth(400 - leftmargin)
-                comboBoxTitle:SetJustifyH("LEFT")
-                comboBoxTitle:SetJustifyV("MIDDLE")
-                local comboBox = CreateFrame("Frame", "MPPE_Setting_"..item.db, _tabPage, "UIDropDownMenuTemplate")
-                comboBox:SetSize(165, 32)
-                comboBox:SetPoint("LEFT", comboBoxTitle, "RIGHT", -5, 0)
-                UIDropDownMenu_SetWidth(comboBox, 175)
-                
-                -- 初始化函数
-                local function InitializeDropDown(self, level)
-                    local info = UIDropDownMenu_CreateInfo()
-                    local currentValueFromDB = MythicPlusPageExtensionDB[item.db]
-                    
-                    for key, displayText in pairs(item.value.list or {}) do
-                        info.text ="  "..Translate[displayText] or key
-                        info.value = key
-                        info.checked = (currentValueFromDB == key)
-                        info.func = function(button)
-                            local selectedKey = button.value
-                            local selectedDisplayText = button:GetText()
-                            UIDropDownMenu_SetSelectedValue(comboBox, selectedKey)
-                            UIDropDownMenu_SetText(comboBox, selectedDisplayText)
-                            MythicPlusPageExtensionDB[item.db] = selectedKey
-                            CloseDropDownMenus()
-                        end
-                        UIDropDownMenu_AddButton(info)
-                    end
-                end
-                
-                UIDropDownMenu_Initialize(comboBox, InitializeDropDown)
-                -- 确定最终要使用的键 (key)，遵循三级优先级
-                local finalKey = nil
-                -- 按优先级检查：数据库值 -> 配置默认值 -> 列表第一项
-                local candidateKeys = { MythicPlusPageExtensionDB[item.db], item.value.default, }
-                for _, key in ipairs(candidateKeys) do
-                    if key and item.value.list and item.value.list[key] then
-                        finalKey = key
-                        break
-                    end
-                end
-                -- 如果前两级都无效，使用列表第一个选项
-                if not finalKey and item.value.list then finalKey = next(item.value.list) end
-                -- 应用选择
-                if finalKey then
-                    local displayText = Translate[item.value.list[finalKey]] or item.value.list[finalKey]
-                    UIDropDownMenu_SetText(comboBox, displayText)
-                    UIDropDownMenu_SetSelectedValue(comboBox, finalKey)
-                    MythicPlusPageExtensionDB[item.db] = finalKey
-                else
-                    UIDropDownMenu_SetText(comboBox, "- WRONG -")
-                end
-                
-                _tabHeight = _tabHeight + comboBoxTitle:GetHeight() + 10
-            elseif item.type == "TextBox" then
-                local textBoxTitle = _tabPage:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")  -- 父框架改为content
-                textBoxTitle:SetPoint("TOPLEFT", leftmargin, -_tabHeight)
-                textBoxTitle:SetText(itemName)
-                textBoxTitle:SetHeight(32)
-                textBoxTitle:SetWidth(400 - leftmargin)
-                textBoxTitle:SetJustifyH("LEFT")
-                textBoxTitle:SetJustifyV("MIDDLE")
-                local textBox = CreateFrame("EditBox", "MPPE_Setting_"..item.db, _tabPage, "InputBoxTemplate")
-                textBox:SetSize(185, 32)
-                textBox:SetAutoFocus(false)
-                textBox:SetPoint("LEFT", textBoxTitle, "RIGHT", 15, 0)
-
-                textBox:SetText(MythicPlusPageExtensionDB[item.db] or item.value.default or "")
-                textBox:SetScript("OnTextChanged", function(self)
-                    MythicPlusPageExtensionDB[item.db] = self:GetText()
-                end)
-                _tabHeight = _tabHeight + textBoxTitle:GetHeight() + 20 -- 补一个间距   
+        for _itemIndex, _item in ipairs(_tabCfg.tabList) do
+            local _itemName = Translate[_item.name] or _item.name or "Item_"..tostring(_itemIndex)
+            local _leftmargin = 5 + (type(_item.indent) == "number" and _item.indent or 0) * 20
+            local _builder = widgetBuilders[_item.type]
+            if _builder then
+                _tabHeight = _builder(_tabPage, _item, _itemName, _leftmargin, _tabHeight)
             end
-            _tabPage:SetHeight(_tabHeight)
         end
+        _tabPage:SetHeight(_tabHeight)
         settings_Tabs:CreateTab(_tabName, _tabPage)
     end
+    LayoutTabButtons()
 end
 
 --==================================================================
 -- 初始化设置函数
 local _initTimes = 0
+local _retrying = false -- 是否已有重试链在调度中（避免 OnShow 与 C_Timer 双入口并发轮询）
 local function InitializeSettings()
+    if _retrying then return end
     if _initTimes > 500 then
         print(string.format("|cffff0000MPPE Settings: %s|r", Translate['SavedVariables failed to load. Critical plugin error! Please check for updates!']))
         return
@@ -624,8 +644,12 @@ local function InitializeSettings()
         if _initTimes % 100 == 0 then
             print(string.format("|cffff0000MPPE Settings: |r%s", Translate['SavedVariables not loaded, initializing lazily.']))
         end
-        C_Timer.After(0.1, InitializeSettings)
         _initTimes = _initTimes + 1
+        _retrying = true
+        C_Timer.After(0.1, function()
+            _retrying = false
+            InitializeSettings()
+        end)
         return
     end
     if not settingsInitialized then
@@ -634,15 +658,28 @@ local function InitializeSettings()
         settingsInitialized = true
     end
 
-    -- 旧版SavedVariables数据转换并清空
-    if MythicPlusPageExtensionDB.DunNameSize then MythicPlusPageExtensionDB.ScoreNTeleport_DunShortName_FontSize = MythicPlusPageExtensionDB.DunNameSize MythicPlusPageExtensionDB.DunNameSize = nil end
-    if MythicPlusPageExtensionDB.DunNamePerLine then MythicPlusPageExtensionDB.ScoreNTeleport_DunShortName_PerLine = MythicPlusPageExtensionDB.DunNamePerLine MythicPlusPageExtensionDB.DunNamePerLine = nil end
-    if MythicPlusPageExtensionDB.DunLevelSize then MythicPlusPageExtensionDB.ScoreNTeleport_DunLevel_FontSize = MythicPlusPageExtensionDB.DunLevelSize MythicPlusPageExtensionDB.DunLevelSize = nil end
-    if MythicPlusPageExtensionDB.DunScoreSize then MythicPlusPageExtensionDB.ScoreNTeleport_DunScore_FontSize = MythicPlusPageExtensionDB.DunScoreSize MythicPlusPageExtensionDB.DunScoreSize = nil end
-    if MythicPlusPageExtensionDB.HideMainFrame then MythicPlusPageExtensionDB.WeeklyReport_Enable = false MythicPlusPageExtensionDB.HideMainFrame = nil end
-    if MythicPlusPageExtensionDB.HideRaiderIOFrame then MythicPlusPageExtensionDB.WeeklyReport_HideRaiderIOFrame = MythicPlusPageExtensionDB.HideRaiderIOFrame MythicPlusPageExtensionDB.HideRaiderIOFrame = nil end
-    if MythicPlusPageExtensionDB.WeeklyReportSize then MythicPlusPageExtensionDB.WeeklyReport_FontSize = MythicPlusPageExtensionDB.WeeklyReportSize MythicPlusPageExtensionDB.WeeklyReportSize = nil end
-    if MythicPlusPageExtensionDB.WeeklyReportWidth then MythicPlusPageExtensionDB.WeeklyReport_FrameWidth = MythicPlusPageExtensionDB.WeeklyReportWidth MythicPlusPageExtensionDB.WeeklyReportWidth = nil end
+    -- 旧版SavedVariables数据迁移表：oldKey -> newKey
+    local DB_MIGRATIONS = {
+        DunNameSize = "ScoreNTeleport_DunShortName_FontSize",
+        DunNamePerLine = "ScoreNTeleport_DunShortName_PerLine",
+        DunLevelSize = "ScoreNTeleport_DunLevel_FontSize",
+        DunScoreSize = "ScoreNTeleport_DunScore_FontSize",
+        HideRaiderIOFrame = "WeeklyReport_HideRaiderIOFrame",
+        WeeklyReportSize = "WeeklyReport_FontSize",
+        WeeklyReportWidth = "WeeklyReport_FrameWidth",
+        ScoreNTeleport_STI_CastStatu = "ScoreNTeleport_STI_CastStatus", -- 修正拼写迁移
+    }
+    for _oldKey, _newKey in pairs(DB_MIGRATIONS) do
+        if MythicPlusPageExtensionDB[_oldKey] then
+            MythicPlusPageExtensionDB[_newKey] = MythicPlusPageExtensionDB[_oldKey]
+            MythicPlusPageExtensionDB[_oldKey] = nil
+        end
+    end
+    -- HideMainFrame 语义特殊：旧版"隐藏主框架"等价于关闭周报
+    if MythicPlusPageExtensionDB.HideMainFrame then
+        MythicPlusPageExtensionDB.WeeklyReport_Enable = false
+        MythicPlusPageExtensionDB.HideMainFrame = nil
+    end
 end
 
 mppe_sFrame:SetScript("OnShow", function(self)
@@ -653,6 +690,7 @@ mppe_sFrame:SetScript("OnShow", function(self)
     settings_Tabs.content:SetWidth(settings_Tabs:GetWidth() - 20)
 
     if not settingsInitialized then InitializeSettings() end
+    LayoutTabButtons()
 end)
 
 C_Timer.After(1, function()
