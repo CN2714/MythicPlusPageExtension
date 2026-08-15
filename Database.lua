@@ -53,8 +53,8 @@ mppe.Dungeons = {
     [246] = {Name = "TolDagor", TeleportID = {}},
     [247] = {Name = "TheMOTHERLODE", TeleportID = {467553, 467555}},
     [248] = {Name = "WaycrestManor", TeleportID = {424167}},
-    [249] = {Name = "KingsRest", TeleportID = {}},
-    [250] = {Name = "TempleofSethraliss", TeleportID = {}},
+    [249] = {Name = "KingsRest", TeleportID = {1286831}},
+    [250] = {Name = "TempleofSethraliss", TeleportID = {1286828}},
     [251] = {Name = "TheUnderrot", TeleportID = {410074}},
     [252] = {Name = "ShrineoftheStorm", TeleportID = {}},
     [353] = {Name = "SiegeofBoralus", TeleportID = {445418, 464256}},
@@ -98,10 +98,11 @@ mppe.Dungeons = {
     [558] = {Name = "MagistersTerrace", TeleportID = {1254572}},
     [559] = {Name = "NexusPointXenas", TeleportID = {1254563}},
     [560] = {Name = "MaisaraCaverns", TeleportID = {1254559}}, 
-    -- [000] = {Name = "MurderRow", TeleportID = {}},
-    -- [000] = {Name = "DenofNalorakk", TeleportID = {}},
-    -- [000] = {Name = "BlindingVale", TeleportID = {}},
-    -- [000] = {Name = "VoidscarArena", TeleportID = {}},
+    [584] = {Name = "BlindingVale", TeleportID = {1286801}},
+    [585] = {Name = "VoidscarArena", TeleportID = {1286804}},
+    [586] = {Name = "DenofNalorakk", TeleportID = {1286807}},
+    [587] = {Name = "MurderRow", TeleportID = {1286809}},
+    [588] = {Name = "AltarofFangs", TeleportID = {1286812}},
 }
 
 mppe.ClassSpec = {

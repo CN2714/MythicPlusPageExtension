@@ -670,7 +670,19 @@ function mppe.SettingsShow()
     Settings.OpenToCategory(category.ID) 
 end
 
+-- 斜杠命令：/mppe 显示设置；/mppe keys 显示钥石窗口；/mppe keys test 测试模式（rawset 避免分析器误报重复定义）
+rawset(SlashCmdList, "MPPE", function(msg)
+    local _args = { strsplit(" ", strtrim(msg or "")) }
+    local _command = strlower(_args[1] or "")
+    local _sub = strlower(_args[2] or "")
+    if _command == "keys" then
+        if _sub == "test" then
+            mppe.GuildAndPartyKS_Show(true)
+        else
+            mppe.GuildAndPartyKS_Toggle()
+        end
+    else
+        Settings.OpenToCategory(category.ID)
+    end
+end)
 SLASH_MPPE1 = "/mppe"
-SlashCmdList["MPPE"] = function()
-    Settings.OpenToCategory(category.ID)
-end

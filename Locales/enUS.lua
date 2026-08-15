@@ -128,3 +128,4 @@ local Translate = mppe.Translate
 -- Translate['DenofNalorakk'] = '';
 -- Translate['BlindingVale'] = '';
 -- Translate['VoidscarArena'] = '';
+-- Translate['AltarofFangs'] = '';

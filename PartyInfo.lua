@@ -433,12 +433,15 @@ end
 -- end
 
 local function GeneratePartyInfoV2()  
-    local weeklyChest = ChallengesFrame.WeeklyInfo.Child.WeeklyChest
-    weeklyChest:ClearAllPoints()
-    weeklyChest:SetPoint("LEFT", 100, 0)
-    local description = ChallengesFrame.WeeklyInfo.Child.WeeklyChest.RunStatus
-    description:SetWordWrap(true)
-    description:SetSize(200, 90)
+    local _weeklyChest = ChallengesFrame.WeeklyInfo.Child.WeeklyChest
+    _weeklyChest:ClearAllPoints()
+    _weeklyChest:SetPoint("LEFT", 100, 0)
+    local _description = ChallengesFrame.WeeklyInfo.Child.Description
+    _description:ClearAllPoints()
+    _description:SetPoint("TOP", ChallengesFrame, "TOP", 0, -50)
+    local _runStatus = ChallengesFrame.WeeklyInfo.Child.WeeklyChest.RunStatus
+    _runStatus:SetWordWrap(true)
+    _runStatus:SetSize(200, 90)
 
     local xoffset = MythicPlusPageExtensionDB.PartyKeyStone_xOffset and MythicPlusPageExtensionDB.PartyKeyStone_xOffset or 0
     local yoffset = MythicPlusPageExtensionDB.PartyKeyStone_yOffset and MythicPlusPageExtensionDB.PartyKeyStone_yOffset or 0
