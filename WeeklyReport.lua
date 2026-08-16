@@ -485,8 +485,9 @@ loginFrame:SetScript("OnEvent", function()
     -- 在 PLAYER_LOGIN 时重新检查 UI 插件
     local UiE = ElvUI and ElvUI[1]
     local UiN = NDui and NDui[1]
+    local UiEll = EllesmereUI 
 
-    -- print("PLAYER_LOGIN: " .. (UiE and "ElvUI Found" or (UiN and "NDui Found" or "No UI")))
+    --print("PLAYER_LOGIN: "..((UiE and "ElvUI Found") or (UiN and "NDui Found") or (UiEll and "EllesmereUI Found") or "No UI"))
 
     -- ==================================================================
     -- 周报主窗体创建
@@ -502,6 +503,9 @@ loginFrame:SetScript("OnEvent", function()
         closeButton:SetScript("OnClick", function() mppeFrame:Hide() end)
         local skins = UiE:GetModule('Skins')
         skins:HandleCloseButton(closeButton)
+        -- 设置按钮（ElvUI 已自动皮肤化，无需额外纹理）
+        mppeFrame.SettingBtn = CreateFrame("Button", "MythicPagePlus_SettingBtn", mppeFrame, "UIPanelIconDropdownButtonTemplate")
+        mppeFrame.SettingBtn:SetPoint("TOPRIGHT", -27, -4)
     elseif UiN then
         mppeFrame = CreateFrame("Frame", "MythicPlusPageExtensionFrame", UIParent, "SettingsFrameTemplate")
         local skins = UiN:GetModule("Skins")
@@ -509,8 +513,39 @@ loginFrame:SetScript("OnEvent", function()
         UiN.SetBD(mppeFrame)
         
         UiN.ReskinClose(mppeFrame.ClosePanelButton)
+        -- 设置按钮（NDui 就地皮肤化）
+        mppeFrame.SettingBtn = CreateFrame("Button", "MythicPagePlus_SettingBtn", mppeFrame, "UIPanelIconDropdownButtonTemplate")
+        mppeFrame.SettingBtn:SetPoint("TOPRIGHT", -27, -4)
+        UiN.Reskin(mppeFrame.SettingBtn)
+        mppeFrame.SettingBtn:ClearAllPoints()
+        mppeFrame.SettingBtn:SetPoint("TOPRIGHT", -27, -6)
+    elseif UiEll then
+        mppeFrame = CreateFrame("Frame", "MythicPlusPageExtensionFrame", UIParent, "SettingsFrameTemplate")
+        -- 提前创建设置按钮（供 RegisterSkin 回调直接处理）
+        mppeFrame.SettingBtn = CreateFrame("Button", "MythicPagePlus_SettingBtn", mppeFrame, "UIPanelIconDropdownButtonTemplate")
+        mppeFrame.SettingBtn:SetPoint("TOPRIGHT", -27, -4)
+        -- 注册 EllesmereUI 皮肤：窗口与设置按钮均已创建，回调统一为全部控件套壳
+        if EllesmereUI.RegisterSkin then
+            EllesmereUI.RegisterSkin("MythicPlusPageExtension", function(skin)
+                if not mppeFrame then return end
+                skin.Shell(mppeFrame)
+                if mppeFrame.ClosePanelButton then
+                    skin.CloseButton(mppeFrame.ClosePanelButton)
+                end
+                if mppeFrame.SettingBtn then
+                    skin.Button(mppeFrame.SettingBtn, {"Icon", "ButtonIcon", "Arrow"})
+                end
+            end)
+        end
     else
         mppeFrame = CreateFrame("Frame", "MythicPlusPageExtensionFrame", UIParent, "SettingsFrameTemplate")
+        -- 设置按钮（默认 Blizzard 样式）
+        mppeFrame.SettingBtn = CreateFrame("Button", "MythicPagePlus_SettingBtn", mppeFrame, "UIPanelIconDropdownButtonTemplate")
+        mppeFrame.SettingBtn:SetPoint("TOPRIGHT", -27, -4)
+        local settingsBtn_texture = mppeFrame.SettingBtn:CreateTexture(nil, "OVERLAY")
+        settingsBtn_texture:SetSize(mppeFrame.SettingBtn:GetWidth()+16,mppeFrame.SettingBtn:GetWidth()+16)
+        settingsBtn_texture:SetPoint("CENTER", 0, -3)
+        settingsBtn_texture:SetAtlas("common-dropdown-a-button-settings-shadowless")
     end
 
     -- 公共属性
@@ -555,7 +590,7 @@ loginFrame:SetScript("OnEvent", function()
             mppeFrame:Hide()
             return
         end
-        if UiE or UiN then
+        if UiE or UiN or UiEll then
             mppeFrame:SetSize(MythicPlusPageExtensionDB.WeeklyReport_FrameWidth, targetFrame:GetHeight()+MythicPlusPageExtensionDB.WeeklyReport_FrameHeightCorrection)
             mppeFrame:ClearAllPoints()
             mppeFrame:SetPoint("TOPLEFT", targetFrame, "TOPRIGHT", 0, MythicPlusPageExtensionDB.WeeklyReport_FrameHeightCorrection/2)
@@ -599,23 +634,7 @@ loginFrame:SetScript("OnEvent", function()
     end
 
     -- ==================================================================
-    -- 设置按钮
-    mppeFrame.SettingBtn = CreateFrame("Button", "MythicPagePlus_SettingBtn", mppeFrame, "UIPanelIconDropdownButtonTemplate")
-    mppeFrame.SettingBtn:SetPoint("TOPRIGHT", -27, -4)
-
-    if UiE then
-        -- ElvUI 下按钮可能已有样式，无需额外纹理
-    elseif UiN then
-        UiN.Reskin(mppeFrame.SettingBtn)
-        mppeFrame.SettingBtn:ClearAllPoints()
-        mppeFrame.SettingBtn:SetPoint("TOPRIGHT", -27, -6)
-    else
-        local settingsBtn_texture = mppeFrame.SettingBtn:CreateTexture(nil, "OVERLAY")
-        settingsBtn_texture:SetSize(mppeFrame.SettingBtn:GetWidth()+16,mppeFrame.SettingBtn:GetWidth()+16)
-        settingsBtn_texture:SetPoint("CENTER", 0, -3)
-        settingsBtn_texture:SetAtlas("common-dropdown-a-button-settings-shadowless")
-    end
-
+    -- 设置按钮脚本（按钮已在上方各 UI 分支创建并完成皮肤处理）
     local originalOnMouseDown = mppeFrame.SettingBtn:GetScript("OnMouseDown")
     local originalOnMouseUp = mppeFrame.SettingBtn:GetScript("OnMouseUp")
     mppeFrame.SettingBtn:SetScript("OnMouseDown", function(self, button, ...)    
