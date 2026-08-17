@@ -66,6 +66,8 @@ Translate['Dungeon Best M+ Records'] = '副本小队最佳记录'
 Translate['No Record'] = '无记录'
 -- -- WeeklyReport
 Translate['WeeklyReport'] = '周报'
+Translate['Show Scroll Bar'] = '显示滚动条'
+Translate['Weekly Report Style'] = '周报窗口样式'
 Translate['Hide RaiderIO Frame When Mythic+ Page Opens.'] = '隐藏RaiderIO窗体'
 Translate['Show Weekly Top8 Report'] = '显示本周最佳前8记录'
 Translate['Weekly Report Font Size'] = '大秘境周报字体大小'

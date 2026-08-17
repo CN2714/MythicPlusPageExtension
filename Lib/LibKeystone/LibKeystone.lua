@@ -1,4 +1,4 @@
---LibKeystone-v12.0.4
+--LibKeystone-v12.0.5
 --@curseforge-project-slug: libkeystone@
 if WOW_PROJECT_ID ~= 1 then return end -- Retail
 

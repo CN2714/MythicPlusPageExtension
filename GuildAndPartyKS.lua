@@ -113,6 +113,20 @@ local function createKeysFrame()
     local _gripTex = _grip:CreateTexture(nil, "OVERLAY")
     _gripTex:SetAllPoints()
     _gripTex:SetTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    -- 鼠标悬停高亮：默认金黄色不透明，进入时切换为加法混合并提亮为白色，移开后还原
+    local gripDefaultAlpha = 1
+    _gripTex:SetAlpha(gripDefaultAlpha)
+    _gripTex:SetVertexColor(1, 1, 0.6)
+    _grip:SetScript("OnEnter", function()
+        _gripTex:SetBlendMode("ADD")
+        _gripTex:SetAlpha(1)
+        _gripTex:SetVertexColor(1, 1, 1)
+    end)
+    _grip:SetScript("OnLeave", function()
+        _gripTex:SetBlendMode("BLEND")
+        _gripTex:SetAlpha(gripDefaultAlpha)
+        _gripTex:SetVertexColor(1, 1, 0.6)
+    end)
     -- 抬高手柄层级，确保不被滚动条等元素遮挡、可正常点击拖动
     _grip:SetFrameLevel(mppe_KeysFrame:GetFrameLevel() + 20)
     mppe_KeysFrame.resizeGrip = _grip

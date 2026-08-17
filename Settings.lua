@@ -359,16 +359,26 @@ settings_Tabs.SettingsList = {
                     default = true,
                 }
             },
-            -- {
-            --     db = "WeeklyReport_FrameStyle",
-            --     name = "周报窗口样式",
-            --     type = "ComboBox", 
-            --     indent = 1,
-            --     value = {
-            --         default = "accordion",
-            --         list = {["accordion"] = "Accordion Style", ["standard"] = "Standard Style"}
-            --     }
-            -- },
+            {
+                db = "WeeklyReport_ShowScrollBar",
+                name = "Show Scroll Bar",
+                type = "CheckBox", 
+                indent = 1,
+                value = {
+                    default = true,
+                }
+            },
+            {
+                db = "WeeklyReport_FrameStyle",
+                name = "Weekly Report Style",
+                type = "ComboBox", 
+                indent = 1,
+                value = {
+                    default = "accordion",
+                    --list = {["accordion"] = "Accordion Style", ["standard"] = "Standard Style"}
+                    list = {["standard"] = "Standard Style"}
+                }
+            },
             {
                 db = "WeeklyReport_HideRaiderIOFrame",
                 name = "Hide RaiderIO Frame When Mythic+ Page Opens.",

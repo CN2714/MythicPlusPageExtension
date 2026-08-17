@@ -41,7 +41,8 @@ MythicPlusPageExtension:SetScript("OnEvent", function(self, event, addonName)
             WeeklyReport_ShowWeeklyTOP8 = true,
             WeeklyReport_FontSize = 15,
             WeeklyReport_FrameWidth = 400,
-            WeeklyReport_FrameHeightCorrection = 0
+            WeeklyReport_FrameHeightCorrection = 0,
+            WeeklyReport_ShowScrollBar = true,
         }
         -- 2. (可选但推荐) 确保每个设置项都有默认值
         for key, defaultValue in pairs(defaultSettings) do
