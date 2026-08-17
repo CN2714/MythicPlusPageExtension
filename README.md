@@ -3,7 +3,7 @@
 > 史诗钥石地下城界面扩展工具（Mythic+ 页面增强）
 > 作者：CN2714
 
-本插件用于增强游戏内的大秘境（史诗钥石地下城）界面，替代大秘境玩家常用的两个主要 WA，并提供队伍钥石查看、队伍信息展示与大秘境周报等功能。
+本插件用于增强游戏内的大秘境（史诗钥石地下城）界面，替代大秘境玩家常用的两个主要 WA：每周大秘境追踪（Weekly Mythic+ Tracker）、史诗钥石地下城界面增强（分数 + 传送 + 通报），并提供队伍钥石查看、队伍信息展示与大秘境周报等功能。
 
 ## 功能特性
 
@@ -31,10 +31,10 @@
 ### /命令支持
 - 打开设置面板： /mppe  
 
-## 参考
+## 参考 & 致谢 - References & Acknowledgements
 
-本插件直接（原代码复制、引用）或间接（参考其逻辑思路或显示样式）引用了以下插件/WA 的功能，对相关作者表示感谢；如有侵权，请联系我删除。
-This addon directly (copied/reused original code) or indirectly (referenced logic ideas or display styles) incorporates features from the following addons/WAs. Thanks to all their authors. If any content infringes your rights, please contact me and I will remove it.
+本插件直接（原代码复制、引用）或间接（参考其逻辑思路或显示样式）引用了以下插件/WA 的功能，对相关作者表示感谢；如有侵权，请联系我删除；如您判断本项目使用了您的源代码但未在下方列出，那大概不是出于我主观的引用，可能是AI自动参考的；主观引用的部分在本项目源代码位置均有注释来源项目。  
+This addon directly (copied/reused original code) or indirectly (referenced logic ideas or display styles) incorporates features from the following addons/WAs. Thanks to all their authors. If any content infringes your rights, please contact me and I will remove it. If you believe your source code has been used in this project but is not listed below, it is most likely not an intentional reference on my part but an automatic reference made by AI; any intentional references are annotated with the source project at the corresponding code locations in the source.
 
 - [每周大秘境追踪（Weekly Mythic+ Tracker）](https://cn.wago.io/lxA3Tr2Fr) 
 - [史诗钥石地下城界面增强（分数 + 传送 + 通报）](https://cn.wago.io/ud2YBS4WC) 
@@ -42,10 +42,11 @@ This addon directly (copied/reused original code) or indirectly (referenced logi
 - [AngryKeystones](https://www.curseforge.com/wow/addons/angry-keystones)
 - [KeystoneLoot](https://www.curseforge.com/wow/addons/keystoneloot)
 - [BugSack](https://www.curseforge.com/wow/addons/bugsack)
+- [DeepSeek](https://www.deepseek.com)
 
 ## 问题反馈
 
-如遇到 Bug 或有功能建议，欢迎在以下地址反馈：
+如遇到 Bug 或有功能建议，欢迎在以下地址反馈：  
 If you encounter bugs or have feature suggestions, please report them at the following addresses:
 
 - **简繁中文**：[NGA](https://bbs.nga.cn/read.php?tid=46017873)

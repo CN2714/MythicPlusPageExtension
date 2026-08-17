@@ -1,1 +1,5 @@
+ignore:
+ - CHANGELOG.txt 
+ - LICENSE
+ - README.md
 manual-changelog: CHANGELOG.txt
