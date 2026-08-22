@@ -5,6 +5,13 @@ local pe = mppe.PartyEvent
 
 local partyCheckTimer = nil
 
+-- 判断名字是否是自己（过滤 LOR 公会频道里自己上报的数据，避免自反馈刷新链）
+local function _isSelf(name)
+    if type(name) ~= "string" or name == "" then return false end
+    local _pure = Ambiguate and Ambiguate(name, "none") or (name:gsub("^([^-]+)%-?.*", "%1"))
+    return _pure == mppe.Mine.Name
+end
+
 -- =================================================================
 -- 事件注册与派发（采集结果统一交给 PartySyncService 处理）
 pe:RegisterEvent("ADDON_LOADED")
@@ -47,8 +54,10 @@ pe:SetScript("OnEvent", function(self, event, ...)
         mppe.PartySync:HandleInspectReady(_guid)
     elseif event == "CHAT_MSG_ADDON" then
         local _prefix, _message, _channel, _sender = ...
-        -- 仅处理队伍频道（PARTY/INSTANCE），忽略公会等其它频道的 addon 消息，避免公会通信污染 PartyDB
+        -- 仅处理队伍频道（PARTY/INSTANCE）：优先过滤，忽略公会/世界等其它频道的 addon 消息，防公会插件浪涌
         if _channel ~= "PARTY" and _channel ~= "INSTANCE" then return end
+        -- 未组队时无队伍频道消息，防御性快速返回
+        if not IsInGroup() then return end
         if _prefix == "AngryKeystones" then
             pe:AKS_Callback(_message, _sender)
         elseif _prefix == mppe.MPPE_Channel:GetPrefix() then
@@ -84,7 +93,7 @@ function pe:Lib_Register()
             mppe.PartyUpsert_Keystone(sender, {
                 ksId = keyChallengeMapID, ksLv = keyLevel, rating = playerRating,
             }, "LKS")
-            mppe.PartySync:NotifyData()
+            mppe.PartySync:NotifyData("LKS")
         end
     end)
     LOR.RegisterCallback(self, "UnitInfoUpdate", "LOR_UnitCallback")
@@ -93,16 +102,21 @@ function pe:Lib_Register()
     C_Timer.After(0.5, function() mppe.PartySync:RequestAll() end)
 end
 
--- LOR 玩家信息回调（职业、专精ID）
+-- LOR 玩家信息回调（职业、专精ID；未组队直接跳过，排除自己 + 仅处理当前队伍成员）
 function pe:LOR_UnitCallback(unitId, unitInfo)
+    -- 未组队时 LOR 上报的均为公会数据，MPPE 不需要，直接跳过
+    if not IsInGroup() then return end
+    if _isSelf(unitId.name) or not mppe.IsInParty(unitId.name) then return end
     mppe.PartyUpsert_Member(unitId.name, {
         class = unitId.class, specId = unitId.specId,
     }, "LOR")
-    mppe.PartySync:NotifyData()
+    mppe.PartySync:NotifyData("LOR_Unit")
 end
 
--- LOR 装备信息回调（装等：gearInfo.ilevel 为玩家平均装等）
+-- LOR 装备信息回调（装等：gearInfo.ilevel 为玩家平均装等；未组队直接跳过）
 function pe:LOR_GearCallback(unitId, gearInfo, allGear)
+    -- 未组队时 LOR 上报的均为公会数据，MPPE 不需要，直接跳过
+    if not IsInGroup() then return end
     if type(gearInfo) ~= "table" then return end
     local _iLv = tonumber(gearInfo.ilevel) or 0
     if _iLv <= 0 then return end
@@ -114,23 +128,33 @@ function pe:LOR_GearCallback(unitId, gearInfo, allGear)
         if _resolved == UnitName("player") then return end
         _name = _resolved
     end
+    -- 排除自己 + 仅处理当前队伍成员，忽略公会/陌生人数据
+    if _isSelf(_name) or not mppe.IsInParty(_name) then return end
     mppe.PartyUpsert_Member(_name, { iLv = _iLv }, "LOR")
-    mppe.PartySync:NotifyData()
+    mppe.PartySync:NotifyData("LOR_Gear")
 end
 
--- LOR 钥石信息回调
+-- LOR 钥石信息回调（未组队直接跳过；排除自己 + 仅处理当前队伍成员，防公会频道浪涌）
 function pe:LOR_KeystoneCallback(unitName, keystoneInfo, allKeystones)
+    -- 未组队时 LOR 上报的均为公会钥石，MPPE 不需要，直接跳过
+    if not IsInGroup() then return end
     if type(keystoneInfo) ~= "table" then return end
+    local _bWrote = false
     for _name, _info in pairs(keystoneInfo) do
-        if type(_info) == "table" then
+        -- 排除自己 + 仅处理队伍成员数据，忽略公会/陌生人，避免非队伍数据驱动的空转刷新
+        if type(_info) == "table" and not _isSelf(_name) and mppe.IsInParty(_name) then
             mppe.PartyUpsert_Keystone(_name, {
                 ksId = rawget(_info, "challengeMapID"),
                 ksLv = rawget(_info, "level"),
                 rating = rawget(_info, "rating"),
             }, "LOR")
+            _bWrote = true
         end
     end
-    mppe.PartySync:NotifyData()
+    -- 仅在实际写入队友数据后才通知刷新
+    if _bWrote then
+        mppe.PartySync:NotifyData("LOR_KS")
+    end
 end
 
 -- AKS 回调：解析 AKS 钥石协议（AKS 消息格式为 "模块名|内容"，如 "Schedule|request" / "Schedule|ksId:ksLv"）
@@ -151,7 +175,7 @@ function pe:AKS_Callback(message, fullName)
     local _ksId, _ksLv = string.match(_payload, "^(%d+):(%d+)$")
     if _ksId then
         mppe.PartyUpsert_Keystone(fullName, { ksId = tonumber(_ksId), ksLv = tonumber(_ksLv) }, "AKS")
-        mppe.PartySync:NotifyData()
+        mppe.PartySync:NotifyData("AKS")
     end
 end
 

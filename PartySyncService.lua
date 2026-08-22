@@ -52,10 +52,12 @@ end
 
 -- 广播自己的全部自报数据（钥石/成员信息/最佳记录）
 function MPPE_Channel:BroadcastAll()
-    -- 钥石
+    -- 钥石（无钥石时不发送，避免接收端写入 0 压制其它来源的真实钥石）
     local _ksId = C_MythicPlus.GetOwnedKeystoneChallengeMapID() or 0
     local _ksLv = C_MythicPlus.GetOwnedKeystoneLevel() or 0
-    self:Send("KS", string.format("%d|%d|0|%d", _ksId, _ksLv, time()))
+    if _ksId > 0 and _ksLv > 0 then
+        self:Send("KS", string.format("%d|%d|0|%d", _ksId, _ksLv, time()))
+    end
     -- 成员信息（职业/专精/装等）
     local _class = select(2, UnitClass("player")) or "UNKNOWN"
     local _specId = C_SpecializationInfo.GetSpecializationInfo(C_SpecializationInfo.GetSpecialization()) or 0
@@ -97,7 +99,8 @@ function MPPE_Channel:OnMessage(message, sender)
         return true
     elseif _type == "KS" then
         local _ksId, _ksLv, _rating = string.match(_payload, "^(%d+)|(%d+)|(%d+)")
-        if _ksId then
+        -- 仅写入有效钥石（ksId>0）：队友无钥石时广播的 0 不写入，避免以最高优先级 MPPE 压制后续 AKS/LKS 来源的真实钥石
+        if _ksId and tonumber(_ksId) > 0 then
             mppe.PartyUpsert_Keystone(sender, {
                 ksId = tonumber(_ksId), ksLv = tonumber(_ksLv), rating = tonumber(_rating or 0),
             }, "MPPE")
@@ -106,9 +109,10 @@ function MPPE_Channel:OnMessage(message, sender)
     elseif _type == "PI" then
         local _class, _specId, _iLv = string.match(_payload, "^([^|]+)|(%d+)|(%d+)")
         if _class then
-            mppe.PartyUpsert_Member(sender, {
-                class = _class, specId = tonumber(_specId), iLv = tonumber(_iLv),
-            }, "MPPE")
+            local _data = { class = _class, specId = tonumber(_specId) }
+            -- 装等为 0（获取失败）时不写入 iLv，避免 MPPE 最高优先级写 0 压制后续 INSP/LOR 的真实装等
+            if _iLv and tonumber(_iLv) > 0 then _data.iLv = tonumber(_iLv) end
+            mppe.PartyUpsert_Member(sender, _data, "MPPE")
         end
         return true
     elseif _type == "BR" then
@@ -163,7 +167,7 @@ function Inspector:ShouldObserve(fullName)
     return false
 end
 
--- 构建观察队列（增量，字段级过滤）
+-- 构建观察队列（增量，字段级过滤；返回新队列，由 Start 决定合并策略）
 function Inspector:BuildQueue(forceRefresh)
     local _newQueue = {}
     for _i = 1, GetNumSubgroupMembers() do
@@ -176,18 +180,28 @@ function Inspector:BuildQueue(forceRefresh)
             end
         end
     end
-    self.queue = _newQueue
-    return #_newQueue
+    return _newQueue
 end
 
--- 启动观察批次（forceRefresh：忽略新鲜度强制全队观察）
+-- 启动观察批次（forceRefresh：忽略新鲜度强制全队观察；观察进行中时新队列按 GUID 去重合并进队尾，避免新队员进入被漏掉）
 function Inspector:Start(forceRefresh)
-    if self.isBusy or not IsInGroup() or IsInRaid() then return end
-    if self:BuildQueue(forceRefresh) == 0 then
-        self.isBusy = false
-        PartySyncService:NotifyData()
+    if not IsInGroup() or IsInRaid() then return end
+    local _newQueue = self:BuildQueue(forceRefresh)
+    if #_newQueue == 0 then
+        -- 无成员需要观察（均被渠道自报覆盖或数据新鲜）
+        if not self.isBusy then PartySyncService:NotifyData("Inspector_Start") end
         return
     end
+    if self.isBusy then
+        -- 观察中：合并进现有队列（GUID 去重，新成员追加到队尾，确保稍后被观察到）
+        local _seen = {}
+        for _, _item in ipairs(self.queue) do _seen[_item.guid] = true end
+        for _, _item in ipairs(_newQueue) do
+            if not _seen[_item.guid] then table.insert(self.queue, _item) end
+        end
+        return
+    end
+    self.queue = _newQueue
     self.isBusy = true
     self:InspectNext()
 end
@@ -205,7 +219,7 @@ end
 function Inspector:InspectNext()
     if #self.queue == 0 then
         self.isBusy = false
-        PartySyncService:NotifyData()
+        PartySyncService:NotifyData("Inspector_Next")
         return
     end
     local _item = table.remove(self.queue, 1)
@@ -317,8 +331,23 @@ function PartySyncService:GetInspectItemLevel(unit)
 end
 
 -- 数据到达通知：防抖刷新 UI（合并短时间内的多次通知）
+-- source 参数标识调用来源（排查用：统计各来源调用次数，定位谁在大量重复调用）
 local _refreshTimer = nil
-function PartySyncService:NotifyData()
+local _notifyCount = 0
+local _notifySources = {}
+function PartySyncService:NotifyData(source)
+    -- 内存排查：按来源累计调用次数，每 100 次打印一次汇总
+    _notifyCount = _notifyCount + 1
+    if source then
+        _notifySources[source] = (_notifySources[source] or 0) + 1
+    end
+    if _notifyCount % 100 == 0 then
+        local _srcParts = {}
+        for _src, _cnt in pairs(_notifySources) do
+            table.insert(_srcParts, string.format("%s=%d", _src, _cnt))
+        end
+        --print(string.format("[MPPE-MEM] NotifyData x%d sources: %s", _notifyCount, table.concat(_srcParts, " ")))
+    end
     if _refreshTimer then _refreshTimer:Cancel() end
     _refreshTimer = C_Timer.After(0.3, function()
         _refreshTimer = nil
