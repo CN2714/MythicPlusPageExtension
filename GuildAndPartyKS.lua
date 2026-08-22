@@ -9,14 +9,25 @@ mppe.GuildKS = mppe.GuildKS or {}
 
 -- 窗口框架引用（首次创建后缓存）
 local mppe_KeysFrame = nil
--- 公会钥石缓存清空定时器（窗体隐藏 1 分钟后销毁数据）
+-- 公会钥石缓存清空定时器（窗体隐藏 10 秒后销毁数据）
 local _guildClearTimer = nil
+-- 窗口初始化标志：createKeysFrame 内初始 Hide() 不触发 OnHide 清空定时器
+local _guildInitializing = false
+-- 公会钥石刷新防抖：首次 0.5s 快速刷新标记（每次打开窗口重置为 false，实现“首次快、后续慢”）
+local _firstRefreshFired = false
+
+-- 性能排查调试开关（定位完卡顿后置 false 关闭 print）
+local _gksDebug = false
+local function _gksLog(...)
+    if _gksDebug then print(...) end
+end
 
 -- 前向声明（initScrollUI/updateLayout 定义在本文件后方，createKeysFrame 需要提前引用）
 local initScrollUI, updateLayout
 
 -- 创建空窗口框架的函数（参考 WeeklyReport.lua 中 mppeFrame 的创建方式）
 local function createKeysFrame()
+    _guildInitializing = true
     mppe_KeysFrame = CreateFrame("Frame", "MPPE_KSFrame", UIParent, "SettingsFrameTemplate")
     mppe_KeysFrame:SetSize(400, 400)
     mppe_KeysFrame:SetPoint("CENTER")
@@ -24,25 +35,42 @@ local function createKeysFrame()
     mppe_KeysFrame:EnableMouse(true)
     mppe_KeysFrame:SetClampedToScreen(true)
     mppe_KeysFrame:SetScript("OnShow", function()
+        _gksLog("[MPPE][GKS] OnShow") -- 追踪：窗口显示时机
+        -- 重置首次快速刷新标记：本次打开首次收到回复用 0.5s 快速展示，后续请求 1.5s 节流
+        _firstRefreshFired = false
         -- 显示时取消待执行的缓存清空定时器
         if _guildClearTimer then
             _guildClearTimer:Cancel()
             _guildClearTimer = nil
         end
-        -- 每次显示时刷新窗口内容（真实模式）
-        mppe.GuildAndPartyKS_Refresh(false)
+        -- 每次显示时刷新窗口内容（真实模式），并强制重建一次公会职业映射（获取一次）
+        mppe.GuildAndPartyKS_Refresh(false, true)
         -- 打开时请求一次公会钥石信息（收到回复后动态追加展示）
         mppe.GuildAndPartyKS_RequestGuild()
     end)
     mppe_KeysFrame:SetScript("OnHide", function()
-        -- 隐藏 1 分钟后清空公会钥石缓存，避免脏数据遗留
+        -- 初始化期间的初始 Hide()（createKeysFrame 末尾）不设置清空定时器
+        if _guildInitializing then _guildInitializing = false return end
+        _gksLog("[MPPE][GKS] OnHide") -- 追踪：窗口隐藏时机
+        -- 隐藏 10 秒后清空公会钥石缓存，避免脏数据遗留
         if _guildClearTimer then _guildClearTimer:Cancel() end
-        _guildClearTimer = C_Timer.After(60, function()
+        _guildClearTimer = C_Timer.After(10, function()
             _guildClearTimer = nil
             table.wipe(mppe.GuildKS)
+            _guildClassMapCache = nil -- 顺带释放公会职业映射缓存
+            -- 延迟主动全量 GC（窗口已隐藏，安全）：回收浮动垃圾并诊断内存是否回落
+            C_Timer.After(1, function()
+                local _envBefore = collectgarbage("count") / 1024
+                local _addonBefore = (GetAddOnMemoryUsage and GetAddOnMemoryUsage(ADDON_NAME) or 0) / 1024
+                collectgarbage("collect")
+                local _envAfter = collectgarbage("count") / 1024
+                local _addonAfter = (GetAddOnMemoryUsage and GetAddOnMemoryUsage(ADDON_NAME) or 0) / 1024
+                _gksLog(string.format("[MPPE][GKS] GC collect: env %.1f->%.1fMB addon %.1f->%.1fMB", _envBefore, _envAfter, _addonBefore, _addonAfter))
+            end)
         end)
     end)
     mppe_KeysFrame:Hide()
+    _guildInitializing = false
 
     -- 标题
     mppe_KeysFrame.title = mppe_KeysFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -105,7 +133,7 @@ local function createKeysFrame()
     _refreshBtn:SetScript("OnClick", function()
         -- 强制刷新：先销毁旧公会钥石缓存，再重新申请数据
         table.wipe(mppe.GuildKS)
-        mppe.GuildAndPartyKS_Refresh(mppe_KeysFrame.isTestMode or false)
+        mppe.GuildAndPartyKS_Refresh(mppe_KeysFrame.isTestMode or false, true)
         mppe.GuildAndPartyKS_RequestGuild()
     end)
     _refreshBtn:SetScript("OnEnter", function(self)
@@ -207,7 +235,7 @@ function mppe.GuildAndPartyKS_Open(isTestMode, bToggle)
     end
     mppe_KeysFrame:Show()
     -- Show 会触发 OnShow 刷新（真实模式），此处再按需覆盖为演示数据
-    mppe.GuildAndPartyKS_Refresh(isTestMode or false)
+    mppe.GuildAndPartyKS_Refresh(isTestMode or false, true)
 end
 
 -- ==================================================================
@@ -236,23 +264,45 @@ local function buildKeystoneLink(mapID, level)
     )
 end
 
--- 构建公会名册 纯名 → 职业英文标识 的映射（取自 GetGuildRosterInfo 第11返回值 classFileName，供名字染色）
-local function buildGuildClassMap()
+-- 公会名册 纯名 → 职业英文标识 缓存（职业为静态信息；仅在打开窗口/手动刷新时 force 重建一次，避免常驻监听 GUILD_ROSTER_UPDATE 反复全量遍历）
+local _guildClassMapCache = nil
+local _guildClassMapDirty = false
+local function buildGuildClassMap(force)
+    -- 非强制：缓存有效且未标记重建 → 直接复用
+    if _guildClassMapCache and not force and not _guildClassMapDirty then return _guildClassMapCache end
+    local _start = debugprofilestop()
     local _map = {}
-    local _count = GetNumGuildMembers() or 0
+    local _mapCount = 0
+    local _count, _online = GetNumGuildMembers()
+    _count = _count or 0
+    _online = _online or 0
     for _i = 1, _count do
-        local _name = GetGuildRosterInfo(_i)
-        if _name then
+        local _name, _, _, _, _, _, _, _, _isOnline, _, _classFile = GetGuildRosterInfo(_i)
+        -- 遍历名册全部成员（含离线）：离线成员的职业（classFileName）同样能获取，供名字染色
+        if _name and _classFile and _classFile ~= "" then
             -- 名册名字可能带 Realm（Name-Realm），统一提取纯名与 GuildKS 缓存 key 对齐
             local _pureName = Ambiguate and Ambiguate(_name, "none") or (_name:gsub("^([^-]+)%-?.*", "%1"))
-            local _classFile = select(11, GetGuildRosterInfo(_i))
-            if _pureName and _pureName ~= "" and _classFile and _classFile ~= "" then
+            if _pureName and _pureName ~= "" then
                 _map[_pureName] = _classFile
+                _mapCount = _mapCount + 1
             end
         end
     end
+    _guildClassMapCache = _map
+    _guildClassMapDirty = false
+    _gksLog(string.format("[MPPE][GKS] buildGuildClassMap: total=%d online=%d map=%d cost=%.2fms", _count, _online, _mapCount, debugprofilestop() - _start))
     return _map
 end
+
+-- 名册加载完成（有成员数据）后即取消常驻监听：职业 map 之后只在打开/手动刷新时 force 重建（获取一次）
+local _guildRosterFrame = CreateFrame("Frame")
+_guildRosterFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
+_guildRosterFrame:SetScript("OnEvent", function()
+    if (GetNumGuildMembers() or 0) > 0 then
+        _guildRosterFrame:UnregisterEvent("GUILD_ROSTER_UPDATE")
+    end
+    _guildClassMapDirty = true
+end)
 
 -- 生成演示数据的函数（测试模式使用，mapID 为挑战模式副本ID；classFile 供名字染色预览）
 local function generateTestData()
@@ -291,6 +341,7 @@ local function renderRow(row, entry)
         row.nameFS:SetText(string.format("%s %s ( %d )", _marker, entry.text, entry.count or 0))
         row.nameFS:SetTextColor(1, 0.82, 0)
         row.keystone:SetText("")
+        row.keystone.data = nil -- 清除复用行残留的成员数据，避免标题行误显示 tooltip
         local _toggle = function()
             _sectionExpanded[entry.section] = not _sectionExpanded[entry.section]
             if mppe_KeysFrame then
@@ -305,13 +356,17 @@ local function renderRow(row, entry)
         -- 标题文字按钮同样可点击（覆盖默认私信逻辑）
         row.name:SetScript("OnClick", _toggle)
     else
+        -- 行复用：清除可能残留的分组标题折叠脚本，恢复成员私信点击逻辑
+        row:SetScript("OnMouseUp", nil)
+        row:EnableMouse(false)
+        row.name:SetScript("OnClick", row.nameClick)
         row.nameFS:SetText(entry.data.name)
-        -- 职业染色：有 classFile 时取 RAID_CLASS_COLORS 职业色，未知职业保持白色
+        -- 职业染色：有 classFile 时取 RAID_CLASS_COLORS 职业色；职业未匹配（含无法获取职业的离线成员）染白灰色标记
         local _classColor = entry.data.classFile and RAID_CLASS_COLORS[entry.data.classFile]
         if _classColor then
             row.nameFS:SetTextColor(_classColor.r, _classColor.g, _classColor.b)
         else
-            row.nameFS:SetTextColor(1, 1, 1)
+            row.nameFS:SetTextColor(0.8, 0.8, 0.8)
         end
         row.keystone:SetText(buildKeystoneLink(entry.data.mapID, entry.data.level))
         row.keystone.data = entry.data -- 挂载数据供悬停 tooltip 使用
@@ -338,7 +393,8 @@ local function createRowUI(parent)
     _row.nameFS:SetJustifyH("LEFT")
     _row.nameFS:SetWordWrap(true)
     _row.nameFS:SetText("")
-    _row.name:SetScript("OnClick", function(self)
+    -- 私信点击逻辑（保存到行对象供行复用后恢复；行可能从分组标题复用为成员行，需要重新挂回该脚本）
+    local function _nameClick(self)
         local _entry = self:GetParent().data
         if _entry and _entry.type == "member" and _entry.data then
             local _link = buildKeystoneLink(_entry.data.mapID, _entry.data.level)
@@ -348,7 +404,9 @@ local function createRowUI(parent)
             local _text = string.format(Translate["Can I run your %s?"], _link)
             ChatFrame_OpenChat(string.format("/w %s %s", _entry.data.name, _text), nil)
         end
-    end)
+    end
+    _row.nameClick = _nameClick
+    _row.name:SetScript("OnClick", _nameClick)
 
     -- 钥石链接（Hkeystone 链接，悬停需手动触发 tooltip）
     _row.keystone = _row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -377,30 +435,42 @@ end
 local function updateScrollList(rows)
     if not mppe_KeysFrame or not mppe_KeysFrame.scrollContent then return end
     local _content = mppe_KeysFrame.scrollContent
+    local _start = debugprofilestop()
+    local _pool = mppe_KeysFrame.rowPool or {}
 
-    -- 清空旧行
-    for _, _oldRow in ipairs(mppe_KeysFrame.rowsUI) do
-        _oldRow:Hide()
-        _oldRow:SetParent(nil)
-    end
-    mppe_KeysFrame.rowsUI = {}
-
-    -- 重建所有行（仅设置内容，布局交给 updateLayout）
+    -- 行复用：从对象池取行，只增删差值，不再每次刷新销毁/重建全部行 UI（避免公会人多时反复创建数百行 UI 对象）
+    local _shownRows = {}
     for _i = 1, #rows do
-        local _row = createRowUI(_content)
+        local _row = _pool[_i]
+        if not _row then
+            _row = createRowUI(_content)
+            _pool[_i] = _row
+        else
+            _row:SetParent(_content)
+            _row:Show()
+        end
         renderRow(_row, rows[_i])
-        table.insert(mppe_KeysFrame.rowsUI, _row)
+        _shownRows[_i] = _row
     end
+    -- 隐藏多余行（保留在池中供下次复用，不销毁）
+    for _i = #rows + 1, #_pool do
+        _pool[_i]:Hide()
+        _pool[_i]:SetParent(nil)
+    end
+    mppe_KeysFrame.rowPool = _pool
+    mppe_KeysFrame.rowsUI = _shownRows
 
     -- 记录并恢复滚动位置（折叠/展开刷新不跳顶；内容变短由滚动框自动夹紧）
     local _oldScroll = mppe_KeysFrame.scrollFrame:GetVerticalScroll()
     updateLayout()
     mppe_KeysFrame.scrollFrame:SetVerticalScroll(_oldScroll)
+    -- _gksLog(string.format("[MPPE][GKS] updateScrollList: rows=%d pool=%d reused=%d cost=%.2fms", #rows, #_pool, math.min(#rows, #_pool), debugprofilestop() - _start))
 end
 
 -- 根据窗口大小调整内容布局：名称/钥石列始终各占 50%，并自动计算换行行高与重排
 updateLayout = function()
     if not mppe_KeysFrame or not mppe_KeysFrame.scrollFrame or not mppe_KeysFrame.scrollContent then return end
+    local _start = debugprofilestop()
     local _scrollWidth = mppe_KeysFrame.scrollFrame:GetWidth()
     local _contentWidth = math.max(_scrollWidth - 0, 100)
     mppe_KeysFrame.scrollContent:SetWidth(_contentWidth)
@@ -427,6 +497,7 @@ updateLayout = function()
         _cursor = _cursor + _rowH
     end
     mppe_KeysFrame.scrollContent:SetHeight(math.max(_cursor, 1))
+    -- _gksLog(string.format("[MPPE][GKS] updateLayout: rows=%d cost=%.2fms", #mppe_KeysFrame.rowsUI, debugprofilestop() - _start))
 end
 
 -- 初始化列表滚动区域与内容容器的函数（创建窗口时调用一次）
@@ -446,12 +517,17 @@ initScrollUI = function()
     _scroll:SetScrollChild(_content)
     mppe_KeysFrame.scrollContent = _content
     mppe_KeysFrame.rowsUI = {}
+    mppe_KeysFrame.rowPool = {}
 end
 
+-- 上一次刷新时的公会缓存条数（诊断：检测 cache 意外减少，定位人数减少问题）
+local _lastGuildKSCount = nil
+
 -- 刷新窗口内容的函数（isTestMode 为 true 时生成演示数据，否则真实数据从缓存读取）
-function mppe.GuildAndPartyKS_Refresh(isTestMode)
+function mppe.GuildAndPartyKS_Refresh(isTestMode, forceClassMap)
     if not mppe_KeysFrame then mppe_KeysFrame = createKeysFrame() end
     mppe_KeysFrame.isTestMode = isTestMode or false
+    local _start = debugprofilestop()
 
     local _partyList, _guildList
     if isTestMode then
@@ -472,17 +548,27 @@ function mppe.GuildAndPartyKS_Refresh(isTestMode)
             end
         end
         table.sort(_partyList, function(_a, _b) return _a.level > _b.level end)
-        -- 公会：从 mppe.GuildKS 缓存读取（收到回复动态追加）
-        local _guildClassMap = buildGuildClassMap()
+        -- 公会：从 mppe.GuildKS 缓存读取（收到回复动态追加）；forceClassMap 为打开/手动刷新时强制重建一次职业映射
+        local _guildClassMap = buildGuildClassMap(forceClassMap)
+        local _cacheCount = 0
+        local _shownCount = 0
         for _name, _data in pairs(mppe.GuildKS) do
+            _cacheCount = _cacheCount + 1
             if _data and _data.mapID and _data.mapID > 0 and _data.level and _data.level > 0 then
                 -- 过滤自己：缓存 key 可能是短名或 Name-Realm，统一提取纯名比较
                 local _pureName = Ambiguate and Ambiguate(_name, "none") or (_name:gsub("^([^-]+)%-?.*", "%1"))
                 if _pureName ~= _myName then
                     table.insert(_guildList, { name = _name, mapID = _data.mapID, level = _data.level, classFile = _guildClassMap[_pureName] })
+                    _shownCount = _shownCount + 1
                 end
             end
         end
+        -- _gksLog(string.format("[MPPE][GKS] guild cache=%d shown=%d", _cacheCount, _shownCount))
+        -- 诊断：cache 比上次刷新减少（无 wipe 来源时不应发生）
+        if _lastGuildKSCount and _cacheCount < _lastGuildKSCount then
+            _gksLog(string.format("[MPPE][GKS] !! cache DECREASED prev=%d now=%d", _lastGuildKSCount, _cacheCount))
+        end
+        _lastGuildKSCount = _cacheCount
         table.sort(_guildList, function(_a, _b) return _a.level > _b.level end)
     end
 
@@ -502,6 +588,24 @@ function mppe.GuildAndPartyKS_Refresh(isTestMode)
     end
 
     updateScrollList(_rows)
+    -- _gksLog(string.format("[MPPE][GKS] Refresh: mode=%s party=%d guild=%d cost=%.2fms", isTestMode and "TEST" or "REAL", #_partyList, #_guildList, debugprofilestop() - _start))
+end
+
+-- 公会钥石刷新防抖：首次 0.5s 快速刷新（首屏及时），后续请求合并为每 1.0s 一次（避免逐条回调触发全量刷新导致卡顿）
+local _guildRefreshTimer = nil
+local _refreshBurstCount = 0
+local function scheduleRefresh()
+    _refreshBurstCount = _refreshBurstCount + 1
+    if _guildRefreshTimer then _guildRefreshTimer:Cancel() end
+    local _delay = _firstRefreshFired and 1.0 or 0.5
+    _guildRefreshTimer = C_Timer.After(_delay, function()
+        _guildRefreshTimer = nil
+        _firstRefreshFired = true
+        _refreshBurstCount = 0
+        if mppe_KeysFrame and mppe_KeysFrame:IsShown() then
+            mppe.GuildAndPartyKS_Refresh(mppe_KeysFrame.isTestMode or false)
+        end
+    end)
 end
 
 -- 请求一次公会钥石信息（LKS GUILD 频道 + LOR 公会请求，均自带节流）
@@ -524,11 +628,14 @@ do
             if not (mppe_KeysFrame and mppe_KeysFrame:IsShown()) then return end
             -- 有钥石才写入；无钥石不删除，避免与 LOR 来源互相覆盖导致先显示又消失
             if keyLevel and keyLevel > 0 and keyChallengeMapID and keyChallengeMapID > 0 then
-                mppe.GuildKS[shortName] = { mapID = keyChallengeMapID, level = keyLevel, rating = playerRating or 0 }
+                local _old = mppe.GuildKS[shortName]
+                -- 仅数据实际变化才写入并刷新，避免数据稳定后仍持续高频刷新导致内存/性能浪费
+                if not _old or _old.mapID ~= keyChallengeMapID or _old.level ~= keyLevel or _old.rating ~= (playerRating or 0) then
+                    mppe.GuildKS[shortName] = { mapID = keyChallengeMapID, level = keyLevel, rating = playerRating or 0 }
+                    scheduleRefresh()
+                end
                 --print(string.format("MPPE: Received guild keystone from LKS: %s +%d (mapID=%d, rating=%d)", shortName, keyLevel, keyChallengeMapID, playerRating or 0))
             end
-            -- 窗口打开时动态刷新（追加展示最新公会钥石；保持当前测试/真实模式）
-            mppe.GuildAndPartyKS_Refresh(mppe_KeysFrame.isTestMode or false)
         end)
     end
     -- LOR 公会钥石（KeystoneUpdate 回调，独立注册不冲突；MPPE/AKS 仅小队共享，不处理）
@@ -547,11 +654,13 @@ do
             local _rating = rawget(keystoneInfo, "rating") or 0
             -- 有钥石才写入；无钥石不删除，避免与 LKS 来源互相覆盖导致先显示又消失
             if _level > 0 and _mapID > 0 then
-                mppe.GuildKS[_key] = { mapID = _mapID, level = _level, rating = _rating }
+                local _old = mppe.GuildKS[_key]
+                -- 仅数据实际变化才写入并刷新，避免数据稳定后仍持续高频刷新导致内存/性能浪费
+                if not _old or _old.mapID ~= _mapID or _old.level ~= _level or _old.rating ~= _rating then
+                    mppe.GuildKS[_key] = { mapID = _mapID, level = _level, rating = _rating }
+                    scheduleRefresh()
+                end
                 --print(string.format("MPPE: Received guild keystone from LOR: %s +%d (mapID=%d, rating=%d)", _key, _level, _mapID, _rating))
-            end
-            if mppe_KeysFrame and mppe_KeysFrame:IsShown() then
-                mppe.GuildAndPartyKS_Refresh(mppe_KeysFrame.isTestMode or false)
             end
         end
         LOR.RegisterCallback(_lorKS, "KeystoneUpdate", "OnKeystoneUpdate")
