@@ -1,3 +1,4 @@
+---@diagnostic disable: inject-field, cast-local-type, param-type-mismatch, missing-parameter, deprecated
 local ADDON_NAME, mppe = ...
 local pe = mppe.PartyEvent
 
@@ -433,6 +434,7 @@ end
 -- end
 
 local function GeneratePartyInfoV2()  
+    -- REF AngryKeystones
     local _weeklyChest = ChallengesFrame.WeeklyInfo.Child.WeeklyChest
     _weeklyChest:ClearAllPoints()
     _weeklyChest:SetPoint("LEFT", 100, 0)
@@ -499,7 +501,7 @@ local function GeneratePartyInfoV2()
         if i == 1 then 
             _name, _realm = mppe.Mine.Name, mppe.Mine.Realm
         else _name, _realm = UnitFullName("Party"..tostring(i-1)) end
-        local _player = pe.GetPlayer(_name, _realm)
+        local _player = mppe.GetPlayer(_name, _realm)
         _player.bLeader = UnitIsGroupLeader(_player.fullName)
         
         local _classSpec = mppe.ClassSpec[_player.class]
@@ -589,10 +591,9 @@ local function GeneratePartyInfoV2()
             --print((_p.class or "NOTFOUND").."：NOclassData")
         end
 
-        -- 4. 用 specData 安全填充 _specName 和 _pIconId
+        -- 4. 用 specData 安全填充 _specName 和 _pIconId（保留 GetSpecializationInfoByID 的真实结果）
         if not _specName then _specName = mppe.Translate[specData and specData.name or "UNKNOWN"] end
         if not _pIconId then _pIconId = (specData and specData.icon) or 0 end
-        _pIconId = (specData and specData.icon) or 0
         -- 5. _specRole 和 _className 的防御性填充
         if not _specRole then _specRole = mppe.Translate["UNKNOWN"] end
         if not _className then _className = _p.class and mppe.Translate[_p.class] or "UNKNOWN" end
@@ -645,7 +646,12 @@ local function GeneratePartyInfoV2()
 
         local _name = _p.name
         _p.iLv = tonumber(_p.iLv)
-        if type(_p.iLv) ~= "number" then _p.iLv = "" else _name = string.format("%d|T:1:1|t|||T:1:1|t%s", _p.iLv, _name) end
+        if _p.iLv and _p.iLv > 0 then
+            _name = string.format("%d|T:1:1|t|||T:1:1|t%s", _p.iLv, _name)
+        else
+            -- 装等未知：用灰色问号占位
+            _name = string.format("|c00707070...|r|T:1:1|t|||T:1:1|t%s", _name)
+        end
         local pName = party:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")        
         pName:SetWordWrap(false)
         pName:SetJustifyH("LEFT")
@@ -685,7 +691,7 @@ local function GeneratePartyInfoV2()
         -- piLv:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
 
         local _pks = ""
-        if _p.ksId > 0 then
+        if _p.ksId > 0 and mppe.Dungeons[_p.ksId] then
             _pks = string.format("%s%s",(_p.ksLv > 0 and _p.ksLv or ""), mppe.Translate[mppe.Dungeons[_p.ksId].Name])
         end
 

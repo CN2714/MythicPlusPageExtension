@@ -2,8 +2,15 @@ local ADDON_NAME, mppe = ...
 local Translate = mppe.Translate
 -- 公会/队伍钥石窗口（空窗口骨架，参考 mppeFrame 样式）
 
+-- LibKeystone / LibOpenRaid 引用与公会钥石缓存（名字 -> { mapID, level, rating }）
+local LKS = LibStub("LibKeystone")
+local LOR = LibStub("LibOpenRaid-1.0")
+mppe.GuildKS = mppe.GuildKS or {}
+
 -- 窗口框架引用（首次创建后缓存）
 local mppe_KeysFrame = nil
+-- 公会钥石缓存清空定时器（窗体隐藏 1 分钟后销毁数据）
+local _guildClearTimer = nil
 
 -- 前向声明（initScrollUI/updateLayout 定义在本文件后方，createKeysFrame 需要提前引用）
 local initScrollUI, updateLayout
@@ -17,15 +24,30 @@ local function createKeysFrame()
     mppe_KeysFrame:EnableMouse(true)
     mppe_KeysFrame:SetClampedToScreen(true)
     mppe_KeysFrame:SetScript("OnShow", function()
-        -- 每次显示时刷新窗口内容（真实模式，真实数据部分暂留空）
+        -- 显示时取消待执行的缓存清空定时器
+        if _guildClearTimer then
+            _guildClearTimer:Cancel()
+            _guildClearTimer = nil
+        end
+        -- 每次显示时刷新窗口内容（真实模式）
         mppe.GuildAndPartyKS_Refresh(false)
+        -- 打开时请求一次公会钥石信息（收到回复后动态追加展示）
+        mppe.GuildAndPartyKS_RequestGuild()
+    end)
+    mppe_KeysFrame:SetScript("OnHide", function()
+        -- 隐藏 1 分钟后清空公会钥石缓存，避免脏数据遗留
+        if _guildClearTimer then _guildClearTimer:Cancel() end
+        _guildClearTimer = C_Timer.After(60, function()
+            _guildClearTimer = nil
+            table.wipe(mppe.GuildKS)
+        end)
     end)
     mppe_KeysFrame:Hide()
 
     -- 标题
     mppe_KeysFrame.title = mppe_KeysFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     mppe_KeysFrame.title:SetPoint("TOP", mppe_KeysFrame, 0, -5)
-    mppe_KeysFrame.title:SetText(Translate["MPPE - Keys"])
+    mppe_KeysFrame.title:SetText(Translate["MPPE - Guild and Party Keystones"])
 
     -- 标题栏（仅点击标题栏区域可拖动窗口）
     local _titleBar = CreateFrame("Button", "MPPE_KSTitleBar", mppe_KeysFrame)
@@ -66,6 +88,35 @@ local function createKeysFrame()
     mppe_KeysFrame.ClosePanelButton:SetScript("OnClick", function()
         mppe_KeysFrame:Hide()
     end)
+
+    -- 刷新按钮（位置/尺寸以关闭按钮为基准：紧贴其左侧并同尺寸；使用红色刷新三态图集；抬高层级避免被顶部标题栏遮挡）
+    local _closeBtn = mppe_KeysFrame.ClosePanelButton
+    local _refreshBtn = CreateFrame("Button", "MPPE_KS_RefreshBtn", mppe_KeysFrame)
+    local _btnW, _btnH = _closeBtn:GetSize()
+    _refreshBtn:SetSize(_btnW, _btnH)
+    -- 右侧紧贴关闭按钮左侧（留 2px 间隙），垂直与关闭按钮居中
+    _refreshBtn:SetPoint("RIGHT", _closeBtn, "LEFT", -2, 0)
+    -- 抬高层级到标题栏之上（标题栏覆盖顶部 28px，默认层级会拦截鼠标事件，导致点击/tooltip 失效）
+    _refreshBtn:SetFrameLevel(mppe_KeysFrame:GetFrameLevel() + 50)
+    -- 三态纹理：正常 / 按下 / 高亮（128-RedButton-Refresh 系列为图集，用 SetAtlas 系列方法）
+    _refreshBtn:SetNormalAtlas("128-RedButton-Refresh")
+    _refreshBtn:SetPushedAtlas("128-RedButton-Refresh-Pressed")
+    _refreshBtn:SetHighlightAtlas("128-RedButton-Refresh-Highlight")
+    _refreshBtn:SetScript("OnClick", function()
+        -- 强制刷新：先销毁旧公会钥石缓存，再重新申请数据
+        table.wipe(mppe.GuildKS)
+        mppe.GuildAndPartyKS_Refresh(mppe_KeysFrame.isTestMode or false)
+        mppe.GuildAndPartyKS_RequestGuild()
+    end)
+    _refreshBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(mppe.Translate['Refresh'], 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    _refreshBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    mppe_KeysFrame.refreshBtn = _refreshBtn
 
     -- 初始化列表滚动区域
     initScrollUI()
@@ -142,22 +193,21 @@ local function createKeysFrame()
     return mppe_KeysFrame
 end
 
--- 切换窗口显示状态的函数（无参切换显示/隐藏）
-function mppe.GuildAndPartyKS_Toggle()
-    if not mppe_KeysFrame then mppe_KeysFrame = createKeysFrame() end
-    if mppe_KeysFrame:IsShown() then
-        mppe_KeysFrame:Hide()
-    else
-        mppe_KeysFrame:Show()
+-- 打开/切换钥石窗口的统一入口（isTestMode 为 true 时演示数据；bToggle 为 true 且窗口已显示时隐藏）
+function mppe.GuildAndPartyKS_Open(isTestMode, bToggle)
+    -- 功能开关：GuildAndPartyKS_Enable 未启用时不执行
+    if not (MythicPlusPageExtensionDB and MythicPlusPageExtensionDB.GuildAndPartyKS_Enable) then
+        print("[MPPE] " .. (mppe.Translate['Guild/Party Keystones disabled. Enable it in Settings (/mppe).'] or "Guild/Party Keystones disabled. Enable it in Settings (/mppe)."))
+        return
     end
-end
-
--- 显示窗口并刷新内容的函数（isTestMode 为 true 时生成演示数据）
-function mppe.GuildAndPartyKS_Show(isTestMode)
     if not mppe_KeysFrame then mppe_KeysFrame = createKeysFrame() end
+    if bToggle and mppe_KeysFrame:IsShown() then
+        mppe_KeysFrame:Hide()
+        return
+    end
     mppe_KeysFrame:Show()
     -- Show 会触发 OnShow 刷新（真实模式），此处再按需覆盖为演示数据
-    mppe.GuildAndPartyKS_Refresh(isTestMode)
+    mppe.GuildAndPartyKS_Refresh(isTestMode or false)
 end
 
 -- ==================================================================
@@ -169,6 +219,12 @@ local ROW_HEIGHT = 22
 local VISIBLE_ROWS = 15
 -- 史诗钥石物品ID
 local KEYSTONE_ITEM_ID = 180653
+-- 分组折叠状态（点击分组标题行切换；party=小队，guild=公会）
+local _sectionExpanded = { party = true, guild = true }
+
+-- 列宽布局：名称列与钥石列始终各占 50%（可分配宽度 = 内容宽 - 间距 - 边距）
+local COL_GAP = 5           -- 名称列与钥石列间距
+local CONTENT_MARGIN = 12   -- 内容左右边距合计
 
 -- 构造钥石链接的函数（Hkeystone 格式：itemID:mapID:level:affix1..affix5，悬停可显示钥石信息）
 local function buildKeystoneLink(mapID, level)
@@ -180,44 +236,83 @@ local function buildKeystoneLink(mapID, level)
     )
 end
 
--- 生成演示数据的函数（测试模式使用，mapID 为挑战模式副本ID）
+-- 构建公会名册 纯名 → 职业英文标识 的映射（取自 GetGuildRosterInfo 第11返回值 classFileName，供名字染色）
+local function buildGuildClassMap()
+    local _map = {}
+    local _count = GetNumGuildMembers() or 0
+    for _i = 1, _count do
+        local _name = GetGuildRosterInfo(_i)
+        if _name then
+            -- 名册名字可能带 Realm（Name-Realm），统一提取纯名与 GuildKS 缓存 key 对齐
+            local _pureName = Ambiguate and Ambiguate(_name, "none") or (_name:gsub("^([^-]+)%-?.*", "%1"))
+            local _classFile = select(11, GetGuildRosterInfo(_i))
+            if _pureName and _pureName ~= "" and _classFile and _classFile ~= "" then
+                _map[_pureName] = _classFile
+            end
+        end
+    end
+    return _map
+end
+
+-- 生成演示数据的函数（测试模式使用，mapID 为挑战模式副本ID；classFile 供名字染色预览）
 local function generateTestData()
     local _partyList = {
-        { name = UnitName("player"), mapID = 499, level = 17 }, -- 圣焰隐修院
-        { name = "测试队员B", mapID = 500, level = 12 }, -- 驭雷栖巢
-        { name = "测试队员C", mapID = 503, level = 10 }, -- 艾拉-卡拉，回响之城
-        { name = "测试队员D", mapID = 504, level = 8 },  -- 暗焰裂口
+        { name = UnitName("player"), mapID = 499, level = 17, classFile = select(2, UnitClass("player")) }, -- 圣焰隐修院
+        { name = "测试队员B", mapID = 500, level = 12, classFile = "MAGE" }, -- 驭雷栖巢
+        { name = "测试队员C", mapID = 503, level = 10, classFile = "PRIEST" }, -- 艾拉-卡拉，回响之城
+        { name = "测试队员D", mapID = 504, level = 8,  classFile = "WARRIOR" },  -- 暗焰裂口
     }
     local _guildList = {
-        { name = "测试会员A", mapID = 499, level = 19 }, -- 圣焰隐修院
-        { name = "测试会员B", mapID = 525, level = 15 }, -- 水闸行动
-        { name = "测试会员C", mapID = 500, level = 14 }, -- 驭雷栖巢
-        { name = "测试会员D", mapID = 504, level = 11 }, -- 暗焰裂口
-        { name = "测试会员E", mapID = 382, level = 9 },  -- 剧场
-        { name = "测试会员F", mapID = 501, level = 18 }, -- 石库
-        { name = "测试会员G", mapID = 502, level = 13 }, -- 丝线之城
-        { name = "测试会员H", mapID = 505, level = 16 }, -- 破晓者号
-        { name = "测试会员I", mapID = 506, level = 12 }, -- 硫磺酒坊
-        { name = "测试会员J", mapID = 542, level = 10 }, -- 艾尔多姆生态穹顶
-        { name = "测试会员K", mapID = 557, level = 17 }, -- 风行者尖塔
-        { name = "测试会员L", mapID = 558, level = 8 },  -- 魔导师平台
-        { name = "测试会员M", mapID = 559, level = 7 },  -- 克赛纳斯枢纽点
-        { name = "测试会员N", mapID = 560, level = 6 },  -- 迈萨拉洞窟
-        { name = "测试会员O", mapID = 503, level = 5 },  -- 艾拉-卡拉，回响之城
+        { name = "测试会员A", mapID = 499, level = 19, classFile = "PALADIN" }, -- 圣焰隐修院
+        { name = "测试会员B", mapID = 525, level = 15, classFile = "MAGE" }, -- 水闸行动
+        { name = "测试会员C", mapID = 500, level = 14, classFile = "PRIEST" }, -- 驭雷栖巢
+        { name = "测试会员D", mapID = 504, level = 11, classFile = "WARRIOR" }, -- 暗焰裂口
+        { name = "测试会员E", mapID = 382, level = 9,  classFile = "HUNTER" },  -- 剧场
+        { name = "测试会员F", mapID = 501, level = 18, classFile = "DRUID" }, -- 石库
+        { name = "测试会员G", mapID = 502, level = 13, classFile = "ROGUE" }, -- 丝线之城
+        { name = "测试会员H", mapID = 505, level = 16, classFile = "SHAMAN" }, -- 破晓者号
+        { name = "测试会员I", mapID = 506, level = 12, classFile = "WARLOCK" }, -- 硫磺酒坊
+        { name = "测试会员J", mapID = 542, level = 10, classFile = "DEATHKNIGHT" }, -- 艾尔多姆生态穹顶
+        { name = "测试会员K", mapID = 557, level = 17, classFile = "MONK" }, -- 风行者尖塔
+        { name = "测试会员L", mapID = 558, level = 8,  classFile = "DEMONHUNTER" },  -- 魔导师平台
+        { name = "测试会员M", mapID = 559, level = 7,  classFile = "EVOKER" },  -- 克赛纳斯枢纽点
+        { name = "测试会员N", mapID = 560, level = 6,  classFile = "PRIEST" },  -- 迈萨拉洞窟
+        { name = "测试会员O", mapID = 503, level = 5,  classFile = "HUNTER" },  -- 艾拉-卡拉，回响之城
     }
     return _partyList, _guildList
 end
 
--- 渲染单行的函数（根据条目类型显示分组标题或成员行）
+-- 渲染单行的函数（分组标题行为可点击折叠菜单，成员行显示名字/钥石）
 local function renderRow(row, entry)
     row.data = entry
     if entry.type == "header" then
-        row.nameFS:SetText(entry.text)
+        -- 分组标题：折叠标记（- 展开 / + 折叠）+ 成员数；点击整行或标题文字切换展开/折叠
+        local _marker = _sectionExpanded[entry.section] and "-" or "+"
+        row.nameFS:SetText(string.format("%s %s ( %d )", _marker, entry.text, entry.count or 0))
         row.nameFS:SetTextColor(1, 0.82, 0)
         row.keystone:SetText("")
+        local _toggle = function()
+            _sectionExpanded[entry.section] = not _sectionExpanded[entry.section]
+            if mppe_KeysFrame then
+                mppe.GuildAndPartyKS_Refresh(mppe_KeysFrame.isTestMode or false)
+            end
+        end
+        -- 整行可点击（EnableMouse + OnMouseUp）
+        row:EnableMouse(true)
+        row:SetScript("OnMouseUp", function(self, _btn)
+            if _btn == "LeftButton" then _toggle() end
+        end)
+        -- 标题文字按钮同样可点击（覆盖默认私信逻辑）
+        row.name:SetScript("OnClick", _toggle)
     else
         row.nameFS:SetText(entry.data.name)
-        row.nameFS:SetTextColor(1, 1, 1)
+        -- 职业染色：有 classFile 时取 RAID_CLASS_COLORS 职业色，未知职业保持白色
+        local _classColor = entry.data.classFile and RAID_CLASS_COLORS[entry.data.classFile]
+        if _classColor then
+            row.nameFS:SetTextColor(_classColor.r, _classColor.g, _classColor.b)
+        else
+            row.nameFS:SetTextColor(1, 1, 1)
+        end
         row.keystone:SetText(buildKeystoneLink(entry.data.mapID, entry.data.level))
         row.keystone.data = entry.data -- 挂载数据供悬停 tooltip 使用
     end
@@ -241,6 +336,7 @@ local function createRowUI(parent)
     _row.nameFS:SetPoint("LEFT", _row.name, "LEFT", 2, 0)
     _row.nameFS:SetPoint("RIGHT", _row.name, "RIGHT", -2, 0)
     _row.nameFS:SetJustifyH("LEFT")
+    _row.nameFS:SetWordWrap(true)
     _row.nameFS:SetText("")
     _row.name:SetScript("OnClick", function(self)
         local _entry = self:GetParent().data
@@ -249,7 +345,7 @@ local function createRowUI(parent)
             -- 原模式：直接发送私信（已注释保留，需要时可恢复）
             -- C_ChatInfo.SendChatMessage(string.format("能一起打你的%s吗？", _link), "WHISPER", nil, _entry.data.name)
             -- 新调整：填入聊天输入框（whisper），玩家确认后按回车再发送
-            local _text = string.format("能一起打你的[%s]吗？", _link)
+            local _text = string.format(Translate["Can I run your %s?"], _link)
             ChatFrame_OpenChat(string.format("/w %s %s", _entry.data.name, _text), nil)
         end
     end)
@@ -259,6 +355,7 @@ local function createRowUI(parent)
     _row.keystone:SetPoint("LEFT", _row.name, "RIGHT", 5, 0)
     _row.keystone:SetWidth(125)
     _row.keystone:SetJustifyH("LEFT")
+    _row.keystone:SetWordWrap(true)
     -- 普通 FontString 不会自动显示超链接 tooltip，需手动 SetHyperlink
     _row.keystone:EnableMouse(true)
     _row.keystone:SetScript("OnEnter", function(self)
@@ -276,7 +373,7 @@ local function createRowUI(parent)
     return _row
 end
 
--- 更新滚动列表的函数（重建所有行并设置内容高度，UIPanelScrollFrameTemplate 自动滚动）
+-- 更新滚动列表的函数（重建所有行；列宽/行高/定位由 updateLayout 统一处理）
 local function updateScrollList(rows)
     if not mppe_KeysFrame or not mppe_KeysFrame.scrollContent then return end
     local _content = mppe_KeysFrame.scrollContent
@@ -288,37 +385,48 @@ local function updateScrollList(rows)
     end
     mppe_KeysFrame.rowsUI = {}
 
-    -- 重建所有行
-    local _count = #rows
-    for _i = 1, _count do
+    -- 重建所有行（仅设置内容，布局交给 updateLayout）
+    for _i = 1, #rows do
         local _row = createRowUI(_content)
-        _row:SetPoint("TOPLEFT", _content, "TOPLEFT", 0, -((_i - 1) * ROW_HEIGHT))
-        _row:SetPoint("TOPRIGHT", _content, "TOPRIGHT", 0, -((_i - 1) * ROW_HEIGHT))
         renderRow(_row, rows[_i])
         table.insert(mppe_KeysFrame.rowsUI, _row)
     end
 
-    -- 设置内容高度（决定滚动范围）
-    _content:SetHeight(math.max(_count * ROW_HEIGHT, 1))
-    -- 重置滚动到顶部
-    mppe_KeysFrame.scrollFrame:SetVerticalScroll(0)
-    -- 应用布局（钥石列自适应宽度）
+    -- 记录并恢复滚动位置（折叠/展开刷新不跳顶；内容变短由滚动框自动夹紧）
+    local _oldScroll = mppe_KeysFrame.scrollFrame:GetVerticalScroll()
     updateLayout()
+    mppe_KeysFrame.scrollFrame:SetVerticalScroll(_oldScroll)
 end
 
--- 根据窗口大小调整内容布局的函数（玩家名/私信列宽固定，钥石列自适应）
+-- 根据窗口大小调整内容布局：名称/钥石列始终各占 50%，并自动计算换行行高与重排
 updateLayout = function()
     if not mppe_KeysFrame or not mppe_KeysFrame.scrollFrame or not mppe_KeysFrame.scrollContent then return end
     local _scrollWidth = mppe_KeysFrame.scrollFrame:GetWidth()
     local _contentWidth = math.max(_scrollWidth - 0, 100)
     mppe_KeysFrame.scrollContent:SetWidth(_contentWidth)
-    -- 钥石列宽 = 内容宽 - 名称列宽(180) - 间距(5) - 边距(12)
-    local _keystoneWidth = math.max(_contentWidth - 180 - 5 - 12, 60)
-    for _, _row in ipairs(mppe_KeysFrame.rowsUI) do
-        if _row.keystone then
-            _row.keystone:SetWidth(_keystoneWidth)
+
+    -- 名称列与钥石列始终各占 50%（可分配宽度 = 内容宽 - 间距 - 边距）
+    local _availWidth = math.max(_contentWidth - COL_GAP - CONTENT_MARGIN, 0)
+    local _nameWidth = _availWidth * 0.5
+    local _keystoneWidth = _availWidth * 0.5
+
+    -- 重排所有行：设置列宽 → 按换行重算行高 → 累计定位
+    local _cursor = 0
+    for _i, _row in ipairs(mppe_KeysFrame.rowsUI) do
+        if _row.name then _row.name:SetWidth(_nameWidth) end
+        if _row.keystone then _row.keystone:SetWidth(_keystoneWidth) end
+        -- 行高 = 名称/钥石换行后的最大实际高度（GetStringHeight 不依赖布局，窗口刚打开/刷新即可正确计算换行；至少 ROW_HEIGHT）
+        local _rowH = ROW_HEIGHT
+        if _row.data and _row.data.type == "member" then
+            _rowH = math.max(_row.nameFS:GetStringHeight() or 0, _row.keystone:GetStringHeight() or 0, ROW_HEIGHT)
         end
+        _row:SetHeight(_rowH)
+        _row:ClearAllPoints()
+        _row:SetPoint("TOPLEFT", mppe_KeysFrame.scrollContent, "TOPLEFT", 0, -_cursor)
+        _row:SetPoint("TOPRIGHT", mppe_KeysFrame.scrollContent, "TOPRIGHT", 0, -_cursor)
+        _cursor = _cursor + _rowH
     end
+    mppe_KeysFrame.scrollContent:SetHeight(math.max(_cursor, 1))
 end
 
 -- 初始化列表滚动区域与内容容器的函数（创建窗口时调用一次）
@@ -340,51 +448,112 @@ initScrollUI = function()
     mppe_KeysFrame.rowsUI = {}
 end
 
--- 刷新窗口内容的函数（isTestMode 为 true 时生成演示数据，否则真实数据暂留空）
+-- 刷新窗口内容的函数（isTestMode 为 true 时生成演示数据，否则真实数据从缓存读取）
 function mppe.GuildAndPartyKS_Refresh(isTestMode)
     if not mppe_KeysFrame then mppe_KeysFrame = createKeysFrame() end
+    mppe_KeysFrame.isTestMode = isTestMode or false
 
     local _partyList, _guildList
     if isTestMode then
         _partyList, _guildList = generateTestData()
     else
-        -- TODO: 获取真实的小队/公会成员钥石信息（留空，后续实现）
+        -- 真实数据：小队/公会钥石分别从 PartyDB / GuildKS 缓存读取（过滤掉自己）
         _partyList = {}
         _guildList = {}
+        local _myName = mppe.Mine.Name or UnitName("player")
+        -- 小队：从 PartyDB 取有钥石的成员（class 为英文职业标识，供名字染色）
+        for _fullName, _rec in pairs(mppe.PartyDB or {}) do
+            if _rec.inParty and _rec.ksId and _rec.ksId > 0 and _rec.ksLv and _rec.ksLv > 0 then
+                -- 过滤自己：PartyDB key 为 Name-Realm，提取纯名比较
+                local _pureName = Ambiguate and Ambiguate(_fullName, "none") or (_fullName:gsub("^([^-]+)%-?.*", "%1"))
+                if _pureName ~= _myName then
+                    table.insert(_partyList, { name = _rec.name or _pureName, mapID = _rec.ksId, level = _rec.ksLv, classFile = _rec.class })
+                end
+            end
+        end
+        table.sort(_partyList, function(_a, _b) return _a.level > _b.level end)
+        -- 公会：从 mppe.GuildKS 缓存读取（收到回复动态追加）
+        local _guildClassMap = buildGuildClassMap()
+        for _name, _data in pairs(mppe.GuildKS) do
+            if _data and _data.mapID and _data.mapID > 0 and _data.level and _data.level > 0 then
+                -- 过滤自己：缓存 key 可能是短名或 Name-Realm，统一提取纯名比较
+                local _pureName = Ambiguate and Ambiguate(_name, "none") or (_name:gsub("^([^-]+)%-?.*", "%1"))
+                if _pureName ~= _myName then
+                    table.insert(_guildList, { name = _name, mapID = _data.mapID, level = _data.level, classFile = _guildClassMap[_pureName] })
+                end
+            end
+        end
+        table.sort(_guildList, function(_a, _b) return _a.level > _b.level end)
     end
 
-    -- 组装带分组标题的完整行列表
+    -- 组装带折叠分组标题的行列表（折叠的分组只保留标题行，不插入成员行）
     local _rows = {}
-    table.insert(_rows, { type = "header", text = "====小队====" })
-    for _, _data in ipairs(_partyList) do
-        table.insert(_rows, { type = "member", data = _data })
+    table.insert(_rows, { type = "header", text = Translate["Party"], section = "party", count = #_partyList })
+    if _sectionExpanded.party then
+        for _, _data in ipairs(_partyList) do
+            table.insert(_rows, { type = "member", data = _data })
+        end
     end
-    table.insert(_rows, { type = "header", text = "====公会====" })
-    for _, _data in ipairs(_guildList) do
-        table.insert(_rows, { type = "member", data = _data })
+    table.insert(_rows, { type = "header", text = Translate["Guild"], section = "guild", count = #_guildList })
+    if _sectionExpanded.guild then
+        for _, _data in ipairs(_guildList) do
+            table.insert(_rows, { type = "member", data = _data })
+        end
     end
 
     updateScrollList(_rows)
 end
 
--- 调试诊断函数（打印窗口与列表状态，用于排查显示问题）
-function mppe.GuildAndPartyKS_Debug()
-    print("=== MPPE Keys Debug ===")
-    print("frame="..tostring(mppe_KeysFrame))
-    if not mppe_KeysFrame then return end
-    print("frame shown="..tostring(mppe_KeysFrame:IsShown()).." size="..tostring(mppe_KeysFrame:GetWidth()).."x"..tostring(mppe_KeysFrame:GetHeight()))
-    local _scroll = mppe_KeysFrame.scrollFrame
-    print("scroll="..tostring(_scroll))
-    if _scroll then
-        print("scroll shown="..tostring(_scroll:IsShown()).." size="..tostring(_scroll:GetWidth()).."x"..tostring(_scroll:GetHeight()))
+-- 请求一次公会钥石信息（LKS GUILD 频道 + LOR 公会请求，均自带节流）
+function mppe.GuildAndPartyKS_RequestGuild()
+    if not IsInGuild() then return end
+    if LKS then LKS.Request("GUILD") end
+    if LOR then LOR:RequestKeystoneDataFromGuild() end
+end
+
+-- ==================================================================
+-- 公会钥石回复回调：收到 LKS GUILD / LOR Keystone 回复后写入缓存并动态刷新窗口
+-- ==================================================================
+do
+    local _guildKSFrame = CreateFrame("Frame")
+    if LKS then
+        LKS.Register(_guildKSFrame, function(keyLevel, keyChallengeMapID, playerRating, shortName, channel)
+            if channel ~= "GUILD" then return end
+            if not shortName or shortName == "" then return end
+            -- 仅窗体打开时接收并写入公会钥石，避免窗口关闭期间积累脏数据
+            if not (mppe_KeysFrame and mppe_KeysFrame:IsShown()) then return end
+            -- 有钥石才写入；无钥石不删除，避免与 LOR 来源互相覆盖导致先显示又消失
+            if keyLevel and keyLevel > 0 and keyChallengeMapID and keyChallengeMapID > 0 then
+                mppe.GuildKS[shortName] = { mapID = keyChallengeMapID, level = keyLevel, rating = playerRating or 0 }
+                --print(string.format("MPPE: Received guild keystone from LKS: %s +%d (mapID=%d, rating=%d)", shortName, keyLevel, keyChallengeMapID, playerRating or 0))
+            end
+            -- 窗口打开时动态刷新（追加展示最新公会钥石；保持当前测试/真实模式）
+            mppe.GuildAndPartyKS_Refresh(mppe_KeysFrame.isTestMode or false)
+        end)
     end
-    local _rowsUI = mppe_KeysFrame.rowsUI
-    print("rowsUI count="..(_rowsUI and #_rowsUI or "nil"))
-    if _rowsUI then
-        for _i = 1, math.min(5, #_rowsUI) do
-            local _row = _rowsUI[_i]
-            local _text = (_row.name and _row.name:GetText()) or "no name"
-            print("row".._i.." shown="..tostring(_row:IsShown()).." name=["..tostring(_text).."]")
+    -- LOR 公会钥石（KeystoneUpdate 回调，独立注册不冲突；MPPE/AKS 仅小队共享，不处理）
+    if LOR then
+        local _lorKS = {}
+        function _lorKS.OnKeystoneUpdate(unitName, keystoneInfo)
+            if type(keystoneInfo) ~= "table" then return end
+            if not unitName or unitName == "" then return end
+            -- 仅窗体打开时接收并写入公会钥石，避免窗口关闭期间积累脏数据
+            if not (mppe_KeysFrame and mppe_KeysFrame:IsShown()) then return end
+            -- 统一 key 为短名（与 LKS 对齐），避免同一玩家两条
+            local _key = Ambiguate and Ambiguate(unitName, "none") or unitName
+            -- mythicPlusMapID 供 C_ChallengeMode.GetMapUIInfo 取副本名；challengeMapID 兜底
+            local _level = rawget(keystoneInfo, "level") or 0
+            local _mapID = rawget(keystoneInfo, "mythicPlusMapID") or rawget(keystoneInfo, "challengeMapID") or 0
+            local _rating = rawget(keystoneInfo, "rating") or 0
+            -- 有钥石才写入；无钥石不删除，避免与 LKS 来源互相覆盖导致先显示又消失
+            if _level > 0 and _mapID > 0 then
+                mppe.GuildKS[_key] = { mapID = _mapID, level = _level, rating = _rating }
+                --print(string.format("MPPE: Received guild keystone from LOR: %s +%d (mapID=%d, rating=%d)", _key, _level, _mapID, _rating))
+            end
+            if mppe_KeysFrame and mppe_KeysFrame:IsShown() then
+                mppe.GuildAndPartyKS_Refresh(mppe_KeysFrame.isTestMode or false)
+            end
         end
+        LOR.RegisterCallback(_lorKS, "KeystoneUpdate", "OnKeystoneUpdate")
     end
 end

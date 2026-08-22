@@ -78,6 +78,17 @@ Translate['Top 8 Weekly Mythic+ Runs:'] = '本週最佳前8傳奇+：'
 Translate['Weekly Mythic+ Total Runs:'] = '本週傳奇+總計：'
 Translate['Left-Click:Settings(/mppe)'] = '左鍵點擊：設置(/mppe)'
 Translate['Right-Click:Refresh(Score&Teleport/PartyInfo/WeeklyReport)'] = '右鍵點擊：刷新(分數&傳送門/小隊訊息/週報)'
+-- -- ExtraFeatures
+Translate['Extras'] = '擴展功能'
+Translate['Quickly hide event notifications in dungeons, such as Respawn Point Unlocked'] = '副本中快速隱藏「事件通知」，如「解鎖重生點」'
+Translate['Enable guild and party keystones information (/mkeys)'] = '啟用公會/隊伍成員的鑰石資訊（/mkeys）'
+-- -- GuildAndPartyKS
+Translate['MPPE - Guild and Party Keystones'] = 'MPPE - 公會和隊伍鑰石'
+Translate['Party'] = '隊伍'
+Translate['Guild'] = '公會'
+Translate['Click name to create PM (manual send).'] = '點擊名字創建私聊(手動發送)'
+Translate['Can I run your %s?'] = '能一起打你的%s嗎?'
+Translate['Refresh'] = '刷新'
 
 --Translate['Shift + Right-Click:Display Demo'] = 'Shift+右鍵點擊：生成演示數據'
 -- Dungeons Shorname 中文縮寫最好≦5字，不然需要調副本簡稱字體大小

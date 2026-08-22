@@ -78,6 +78,17 @@ Translate['Top 8 Weekly Mythic+ Runs:'] = '本周最佳前8大秘境：'
 Translate['Weekly Mythic+ Total Runs:'] = '本周大秘境总计：'
 Translate['Left-Click:Settings(/mppe)'] = '左键点击：设置(/mppe)'
 Translate['Right-Click:Refresh(Score&Teleport/PartyInfo/WeeklyReport)'] = '右键点击：刷新(分数&传送门/小队信息/周报)'
+-- -- ExtraFeatures
+Translate['Extras'] = '扩展功能'
+Translate['Quickly hide event notifications in dungeons, such as Respawn Point Unlocked'] = '副本中快速隐藏“事件通知”，如“解锁重生点”'
+Translate['Enable guild and party keystones information (/mkeys)'] = '启用公会/队伍成员的钥石信息（/mkeys）'
+-- -- GuildAndPartyKS
+Translate['MPPE - Guild and Party Keystones'] = 'MPPE - 公会和队伍钥石'
+Translate['Party'] = '队伍'
+Translate['Guild'] = '公会'
+Translate['Click name to create PM (manual send).'] = '点击名字创建私聊(手动发送)'
+Translate['Can I run your %s?'] = '能一起打你的%s吗?'
+Translate['Refresh'] = '刷新'
 
 --Translate['Shift + Right-Click:Display Demo'] = 'Shift+右键点击：生成演示数据'
 -- Dungeons Shortname 中文缩写最好≤5字，不然需要调副本简称字体大小

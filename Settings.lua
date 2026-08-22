@@ -435,6 +435,33 @@ settings_Tabs.SettingsList = {
             },
         }
     },
+    {
+        tabName = "Extras",
+        tabList = {
+            {
+                db = "ToastQuickHide_Enable", --EventToastManagerFrame
+                name = "Quickly hide event notifications in dungeons, such as Respawn Point Unlocked",
+                type = "CheckBox", 
+                indent = 0,
+                value = {
+                    default = false,
+                },
+                -- 勾选时热启用/停用对应扩展（走统一加载管理，无需 /reload）
+                onChange = function(_checked)
+                    if mppe.SetExtensionEnabled then mppe.SetExtensionEnabled("ToastQuickHide", _checked) end
+                end,
+            },
+            {
+                db = "GuildAndPartyKS_Enable",
+                name = "Enable guild and party keystones information (/mkeys)",
+                type = "CheckBox", 
+                indent = 0,
+                value = {
+                    default = false,
+                }
+            },
+        }
+    }
 }
 --==================================================================
 -- 设置页布局常量
@@ -512,6 +539,8 @@ local function BuildCheckBox(parent, item, itemName, leftmargin, tabHeight)
     _checkBox:SetChecked(GetDBValue(item, "boolean", false))
     _checkBox:SetScript("OnClick", function(self)
         MythicPlusPageExtensionDB[item.db] = self:GetChecked()
+        -- 支持设置项级联回调（如 Toast 快速隐藏的热注册）
+        if item.onChange then item.onChange(self:GetChecked()) end
     end)
     return tabHeight + _checkBox:GetHeight() + 10 + 12
 end
@@ -718,19 +747,19 @@ function mppe.SettingsShow()
     Settings.OpenToCategory(category.ID) 
 end
 
--- 斜杠命令：/mppe 显示设置；/mppe keys 显示钥石窗口；/mppe keys test 测试模式（rawset 避免分析器误报重复定义）
+-- 斜杠命令：/mppe 显示设置；/mkeys 切换钥石窗口；/mkeys test 测试模式；/mkeys debug 调试（rawset 避免分析器误报重复定义）
 rawset(SlashCmdList, "MPPE", function(msg)
-    local _args = { strsplit(" ", strtrim(msg or "")) }
-    local _command = strlower(_args[1] or "")
-    local _sub = strlower(_args[2] or "")
-    if _command == "keys" then
-        if _sub == "test" then
-            mppe.GuildAndPartyKS_Show(true)
-        else
-            mppe.GuildAndPartyKS_Toggle()
-        end
-    else
-        Settings.OpenToCategory(category.ID)
-    end
+    Settings.OpenToCategory(category.ID)
 end)
 SLASH_MPPE1 = "/mppe"
+
+rawset(SlashCmdList, "MKEYS", function(msg)
+    -- 只解析参数并调用统一入口（Enable 判断已在 GuildAndPartyKS_Open 内处理）
+    local _sub = strlower(strtrim(msg or ""))
+    if _sub == "test" then
+        mppe.GuildAndPartyKS_Open(true, false)
+    else
+        mppe.GuildAndPartyKS_Open(false, true)
+    end
+end)
+SLASH_MKEYS1 = "/mkeys"
