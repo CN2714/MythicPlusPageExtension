@@ -8,7 +8,8 @@ local partyCheckTimer = nil
 -- 判断名字是否是自己（过滤 LOR 公会频道里自己上报的数据，避免自反馈刷新链）
 local function _isSelf(name)
     if type(name) ~= "string" or name == "" then return false end
-    local _pure = Ambiguate and Ambiguate(name, "none") or (name:gsub("^([^-]+)%-?.*", "%1"))
+    -- 手动剥离 -Realm 后缀（跨服全名用 Ambiguate("none") 会保留服务器后缀，与 IsInParty 保持一致）
+    local _pure = (name:gsub("^([^-]+)%-?.*", "%1"))
     return _pure == mppe.Mine.Name
 end
 
@@ -23,13 +24,17 @@ pe:RegisterEvent("CHAT_MSG_ADDON")
 
 pe:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
-        -- 初始化：注册 MPPE 通信前缀 + Lib 回调 + 启动定时检查
-        mppe.MPPE_Channel:Init()
-        C_Timer.After(0.5, function() pe:Lib_Register() end)
-        C_Timer.After(1, function() pe:PartyCheckTimer(true) end)
-        -- reload 时若已在队伍中，恢复 inParty 标记
-        C_Timer.After(1.5, function() mppe.PartyCleanup() end)
-        self:UnregisterEvent("ADDON_LOADED")
+        local _addonName = ...
+        -- 仅本插件加载完成才初始化（ADDON_LOADED 对所有插件触发，不判断会导致本插件文件未加载时提前执行 Init，MPPE 前缀注册失败）
+        if _addonName == ADDON_NAME then
+            -- 初始化：注册 MPPE 通信前缀 + Lib 回调 + 启动定时检查
+            mppe.MPPE_Channel:Init()
+            C_Timer.After(0.5, function() pe:Lib_Register() end)
+            C_Timer.After(1, function() pe:PartyCheckTimer(true) end)
+            -- reload 时若已在队伍中，恢复 inParty 标记
+            C_Timer.After(1.5, function() mppe.PartyCleanup() end)
+            self:UnregisterEvent("ADDON_LOADED")
+        end
     elseif event == "GROUP_JOINED" then
         -- 进队：停止旧观察并全渠道同步，延迟维护 inParty（等队伍信息就绪）
         mppe.PartySync:StopInspector()

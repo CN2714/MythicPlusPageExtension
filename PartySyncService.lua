@@ -24,7 +24,9 @@ local RATE_LIMIT = 3         -- 限流间隔（秒）
 -- 初始化：注册 addon 消息前缀（登录后可调用）
 function MPPE_Channel:Init()
     if _registered then return end
-    _prefix = C_ChatInfo.RegisterAddonMessagePrefix("MPPE")
+    -- RegisterAddonMessagePrefix 返回结果码（0=成功），前缀统一用常量 "MPPE"
+    C_ChatInfo.RegisterAddonMessagePrefix("MPPE")
+    _prefix = "MPPE"
     _registered = true
 end
 

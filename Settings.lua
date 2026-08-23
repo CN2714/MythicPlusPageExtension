@@ -460,6 +460,24 @@ settings_Tabs.SettingsList = {
                     default = false,
                 }
             },
+            {
+                db = "GuildAndPartyKS_SlashKey",
+                name = "↑ Allow /key command to summon.",
+                type = "CheckBox", 
+                indent = 1,
+                value = {
+                    default = false,
+                }
+            },
+            {
+                db = "GuildAndPartyKS_PMContent",
+                name = "PM Content(keystone = %s)",
+                type = "TextBox", 
+                indent = 1,
+                value = {
+                    default = Translate["Can I run your %s?"],
+                }
+            },
         }
     }
 }
@@ -619,7 +637,10 @@ local function BuildTextBox(parent, item, itemName, leftmargin, tabHeight)
     _textBox:SetSize(185, 32)
     _textBox:SetAutoFocus(false)
     _textBox:SetPoint("LEFT", _title, "RIGHT", 15, 0)
-    _textBox:SetText(MythicPlusPageExtensionDB[item.db] or item.value.default or "")
+    -- 非字符串视为未设置，回退到配置默认值（避免 DB 历史空串导致默认值不生效）
+    local _textValue = MythicPlusPageExtensionDB[item.db]
+    if type(_textValue) ~= "string" then _textValue = item.value.default or "" end
+    _textBox:SetText(_textValue)
     _textBox:SetScript("OnTextChanged", function(self)
         MythicPlusPageExtensionDB[item.db] = self:GetText()
     end)

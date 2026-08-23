@@ -398,10 +398,12 @@ local function createRowUI(parent)
         local _entry = self:GetParent().data
         if _entry and _entry.type == "member" and _entry.data then
             local _link = buildKeystoneLink(_entry.data.mapID, _entry.data.level)
-            -- 原模式：直接发送私信（已注释保留，需要时可恢复）
-            -- C_ChatInfo.SendChatMessage(string.format("能一起打你的%s吗？", _link), "WHISPER", nil, _entry.data.name)
+            -- 私信模板：设置里已存内容（含空串）时优先使用，仅未设置（nil）才回退默认模板
+            local _pmContent = MythicPlusPageExtensionDB and MythicPlusPageExtensionDB.GuildAndPartyKS_PMContent
+            local _template = (type(_pmContent) == "string") and _pmContent or Translate["Can I run your %s?"]
+            -- 含 %s 占位符则替换为钥石链接，不含则原样使用（gsub 函数形式避免链接特殊字符被转义）
+            local _text = _template:gsub("%%s", function() return _link end)
             -- 新调整：填入聊天输入框（whisper），玩家确认后按回车再发送
-            local _text = string.format(Translate["Can I run your %s?"], _link)
             ChatFrame_OpenChat(string.format("/w %s %s", _entry.data.name, _text), nil)
         end
     end

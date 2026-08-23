@@ -84,6 +84,8 @@ Translate['Quickly hide event notifications in dungeons, such as Respawn Point U
 Translate['Enable guild and party keystones information (/mkeys)'] = '启用公会/队伍成员的钥石信息（/mkeys）'
 -- -- GuildAndPartyKS
 Translate['MPPE - Guild and Party Keystones'] = 'MPPE - 公会和队伍钥石'
+Translate['↑ Allow /key command to summon'] = '↑允许使用/key命令'
+Translate['PM Content(keystone = %s)'] = '私信内容(钥石 = %s)'
 Translate['Party'] = '队伍'
 Translate['Guild'] = '公会'
 Translate['Click name to create PM (manual send).'] = '点击名字创建私聊(手动发送)'
