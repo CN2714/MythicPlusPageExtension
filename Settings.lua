@@ -462,7 +462,7 @@ settings_Tabs.SettingsList = {
             },
             {
                 db = "GuildAndPartyKS_SlashKey",
-                name = "↑ Allow /key command to summon.",
+                name = "↑ Allow /key command to summon",
                 type = "CheckBox", 
                 indent = 1,
                 value = {
@@ -784,3 +784,18 @@ rawset(SlashCmdList, "MKEYS", function(msg)
     end
 end)
 SLASH_MKEYS1 = "/mkeys"
+
+-- /key 命令：操作与 /mkeys 相同，但需设置 GuildAndPartyKS_SlashKey 为 true 才允许呼出
+rawset(SlashCmdList, "KEY", function(msg)
+    if not (MythicPlusPageExtensionDB and MythicPlusPageExtensionDB.GuildAndPartyKS_SlashKey) then
+        return
+    end
+    -- 与 /mkeys 相同：test 参数进测试模式，否则切换窗口
+    local _sub = strlower(strtrim(msg or ""))
+    if _sub == "test" then
+        mppe.GuildAndPartyKS_Open(true, false)
+    else
+        mppe.GuildAndPartyKS_Open(false, true)
+    end
+end)
+SLASH_KEY1 = "/key"

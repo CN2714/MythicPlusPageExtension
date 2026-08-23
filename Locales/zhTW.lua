@@ -85,7 +85,7 @@ Translate['Enable guild and party keystones information (/mkeys)'] = '啟用公�
 -- -- GuildAndPartyKS
 Translate['MPPE - Guild and Party Keystones'] = 'MPPE - 公會和隊伍鑰石'
 Translate['↑ Allow /key command to summon'] = '↑允許使用/key命令'
-Translate['PM Content(keystone = %s)'] = '私信內容(鑰石 = %s)'
+Translate['PM Content(keystone = %s)'] = '私信內容（鑰石 = %s）'
 Translate['Party'] = '隊伍'
 Translate['Guild'] = '公會'
 Translate['Click name to create PM (manual send).'] = '點擊名字創建私聊(手動發送)'
