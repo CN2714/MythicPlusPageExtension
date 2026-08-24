@@ -309,13 +309,14 @@ function PartySyncService:GetInspectItemLevel(unit)
             local _link = GetInventoryItemLink(unit, _slot)
             if _link then
                 -- 物品信息未缓存（有链接但取不到装等）：标记本次计算不完整，整体返回 0 等重试
-                local _iLv = select(4, GetItemInfo(_link))
-                if not _iLv then _bUncached = true end
-                -- 单手/双手武器判断
-                local _, _, _, _, _, _, _classID, _subClassID = select(6, GetItemInfo(_link))                
+                -- GetItemInfo 调用同时取装等(itemLevel)/物品类ID(itemClassID)/子类ID(itemSubClassID)
+                local _, _, _, _iLv, _, _, _, _, _, _, _classID, _subClassID = GetItemInfo(_link)
+                -- 装等为 0 也视为未就绪（Lua 中 0 为真值，原 if not _iLv 拦不住 0，会导致 _total 静默少算而平均失真）
+                if not _iLv or _iLv == 0 then _bUncached = true end
                 --[0] = 'Axe1H', [4] = 'Mace1H', [7] = 'Sword1H', [9] = 'Warglaive', [13] = 'Unarmed', [15] = 'Dagger', [19] = 'Wand'
                 --[0] = '单手斧', [4] = '单手锤', [7] = '单手剑', [9] = '战刃',[13] = '徒手/拳套', [15] = '匕首', [19] = '魔杖'
-                if _classID == 2 and (_subClassID == 0 or _subClassID == 4 or _subClassID == 7 or _subClassID == 9 or _subClassID == 13 or _subClassID == 15 or _subClassID == 19) then _count = 16 end
+                -- 分母=配装应有部位数：主手单手（本应有副手）或副手槽有物品（双持/泰坦之握/单手+盾）→16；双手武器+副手空 →15
+                if (_classID == 2 and (_subClassID == 0 or _subClassID == 4 or _subClassID == 7 or _subClassID == 9 or _subClassID == 13 or _subClassID == 15 or _subClassID == 19)) or _slot == 17 then _count = 16 end
                 _total = _total + (_iLv or 0)
             end
         end
