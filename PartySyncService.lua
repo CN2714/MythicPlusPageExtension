@@ -303,7 +303,6 @@ function PartySyncService:GetInspectItemLevel(unit)
     if not unit or not UnitExists(unit) then return 0 end
     local _total = 0
     local _count = 15
-    local _twoHanded = true
     local _bUncached = false
     for _slot = 1, 17 do
         if _slot ~= 4 then
@@ -313,16 +312,11 @@ function PartySyncService:GetInspectItemLevel(unit)
                 local _iLv = select(4, GetItemInfo(_link))
                 if not _iLv then _bUncached = true end
                 -- 单手/双手武器判断
-                local _classID = select(12, GetItemInfo(_link))
-                local _subClassID = select(13, GetItemInfo(_link))
-                if _classID == 2 then
-                    local _oneHanded = { [0] = true, [4] = true, [7] = true, [13] = true, [15] = true, [19] = true }
-                    if _oneHanded[_subClassID] then _twoHanded = false end
-                end
+                local _, _, _, _, _, _, _classID, _subClassID = select(6, GetItemInfo(_link))                
+                --[0] = 'Axe1H', [4] = 'Mace1H', [7] = 'Sword1H', [13] = 'Unarmed', [15] = 'Dagger', [19] = 'Wand'
+                --[0] = '单手斧', [4] = '单手锤', [7] = '单手剑', [13] = '徒手', [15] = '匕首', [19] = '魔杖'
+                if _classID == 2 and (_subClassID == 0 or _subClassID == 4 or _subClassID == 7 or _subClassID == 15 or _subClassID == 19) then _count = 16 end
                 _total = _total + (_iLv or 0)
-            elseif _slot == 17 and _twoHanded == false then
-                -- 单手武器副手空槽补一个装等位
-                _count = _count + 1
             end
         end
     end
