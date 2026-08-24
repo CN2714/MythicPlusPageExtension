@@ -454,7 +454,7 @@ local function GeneratePartyInfoV2()
 
     local PartyInfoFrame = _G["mppePartyInfoFrame"] or CreateFrame("Frame" ,"mppePartyInfoFrame", ChallengesFrame)
     ClearFrameContents(PartyInfoFrame) -- 关键：每次运行都先清空
-    PartyInfoFrame:SetSize(265, 135)
+    PartyInfoFrame:SetSize(MythicPlusPageExtensionDB.PartyInfo_Width and MythicPlusPageExtensionDB.PartyInfo_Width or 265, 135)
     PartyInfoFrame:SetPoint("BOTTOMRIGHT", ChallengesFrame, "BOTTOMRIGHT", -10 + xoffset, 75 + yoffset)
     PartyInfoFrame:Show() -- 确保显示
     

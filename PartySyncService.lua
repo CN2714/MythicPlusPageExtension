@@ -322,7 +322,7 @@ function PartySyncService:GetInspectItemLevel(unit)
     end
     -- 存在未缓存部位：返回 0 让上层重试（避免部分部位计 0 导致平均装等失真，如 297 被算成 217）
     if _bUncached then return 0 end
-    print(_total, _count)
+    --print(_total, _count)
     if _count > 0 then return mppe.MathRound(_total / _count, 0) end
     return 0
 end

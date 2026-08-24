@@ -175,7 +175,7 @@ end
 
 --==================================================================
 settings_Tabs.SettingsList = {
-    {
+    {-- Score&Teleport
         tabName = "Score&Teleport",
         tabList = {
             {
@@ -299,7 +299,7 @@ settings_Tabs.SettingsList = {
             },
         }
     },
-    {
+    {-- PartyInfo
         tabName = "PartyInfo",
         tabList = {
             {
@@ -319,6 +319,18 @@ settings_Tabs.SettingsList = {
                 value = {
                     default = "raiderio",
                     list = {["raiderio"] = "RaiderIO Style", ["standard"] = "Standard Style"}
+                }
+            },
+            {
+                db = "PartyInfo_Width",
+                name = "PartyInfo Width",
+                type = "Slider", 
+                indent = 1,
+                value = {
+                    default = 265,
+                    min = 250,
+                    max = 350,
+                    step = 1
                 }
             },
             {
@@ -347,7 +359,7 @@ settings_Tabs.SettingsList = {
             }
         }
     },
-    {
+    {-- Weekly Report
         tabName = "WeeklyReport",
         tabList = {
             {
@@ -435,7 +447,7 @@ settings_Tabs.SettingsList = {
             },
         }
     },
-    {
+    {-- Extras
         tabName = "Extras",
         tabList = {
             {

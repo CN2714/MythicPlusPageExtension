@@ -58,6 +58,7 @@ Translate['Cannot get spell info while in this instance.'] = '當前場景無法
 -- Translate['PartyKeyStone'] = '小隊鑰石'
 Translate['PartyInfo'] = '小隊訊息'
 Translate['Score Text Color Style'] = '分數染色樣式'
+Translate['PartyInfo Width'] = '小隊信息寬度'
 Translate['X Offset'] = 'X軸偏移'
 Translate['Y Offset'] = 'Y軸偏移'
 Translate['SeasonRating:'] = '賽季評分：'

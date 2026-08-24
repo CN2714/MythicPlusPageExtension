@@ -58,6 +58,7 @@ Translate['Cannot get spell info while in the current state.'] = '当前状态�
 -- Translate['PartyKeyStone'] = '小队钥石'
 Translate['PartyInfo'] = '小队信息'
 Translate['Score Text Color Style'] = '分数染色样式'
+Translate['PartyInfo Width'] = '小队信息宽度'
 Translate['X Offset'] = 'X轴偏移'
 Translate['Y Offset'] = 'Y轴偏移'
 Translate['SeasonRating:'] = '赛季评分：'
