@@ -313,15 +313,16 @@ function PartySyncService:GetInspectItemLevel(unit)
                 if not _iLv then _bUncached = true end
                 -- 单手/双手武器判断
                 local _, _, _, _, _, _, _classID, _subClassID = select(6, GetItemInfo(_link))                
-                --[0] = 'Axe1H', [4] = 'Mace1H', [7] = 'Sword1H', [13] = 'Unarmed', [15] = 'Dagger', [19] = 'Wand'
-                --[0] = '单手斧', [4] = '单手锤', [7] = '单手剑', [13] = '徒手', [15] = '匕首', [19] = '魔杖'
-                if _classID == 2 and (_subClassID == 0 or _subClassID == 4 or _subClassID == 7 or _subClassID == 15 or _subClassID == 19) then _count = 16 end
+                --[0] = 'Axe1H', [4] = 'Mace1H', [7] = 'Sword1H', [9] = 'Warglaive', [13] = 'Unarmed', [15] = 'Dagger', [19] = 'Wand'
+                --[0] = '单手斧', [4] = '单手锤', [7] = '单手剑', [9] = '战刃',[13] = '徒手/拳套', [15] = '匕首', [19] = '魔杖'
+                if _classID == 2 and (_subClassID == 0 or _subClassID == 4 or _subClassID == 7 or _subClassID == 9 or _subClassID == 13 or _subClassID == 15 or _subClassID == 19) then _count = 16 end
                 _total = _total + (_iLv or 0)
             end
         end
     end
     -- 存在未缓存部位：返回 0 让上层重试（避免部分部位计 0 导致平均装等失真，如 297 被算成 217）
     if _bUncached then return 0 end
+    print(_total, _count)
     if _count > 0 then return mppe.MathRound(_total / _count, 0) end
     return 0
 end

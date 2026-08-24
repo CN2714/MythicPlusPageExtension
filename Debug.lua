@@ -361,9 +361,9 @@ local function buildInspectResult(unit)
                 _row.quality = _quality or 1
                 _row.iLv = _iLv or 0
                 _row.link = _link
-                -- 单手武器判断（与 PartySyncService 一致）
+                -- 单手武器判断（与 PartySyncService 一致；9=战刃(DH)，13=拳套(Unarmed/Fist)）
                 if _classID == 2 then
-                    local _oneHanded = { [0] = true, [4] = true, [7] = true, [13] = true, [15] = true, [19] = true }
+                    local _oneHanded = { [0] = true, [4] = true, [7] = true, [9] = true, [13] = true, [15] = true, [19] = true }
                     if _oneHanded[_subClassID] then _twoHanded = false end
                 end
                 _total = _total + (_iLv or 0)
