@@ -25,6 +25,37 @@ end
 -- 前向声明（initScrollUI/updateLayout 定义在本文件后方，createKeysFrame 需要提前引用）
 local initScrollUI, updateLayout
 
+-- 保存窗口当前的位置/大小到 SavedVariables（拖动/缩放结束或窗口隐藏时调用）
+local function saveWindowState()
+    if not MythicPlusPageExtensionDB or not mppe_KeysFrame then return end
+    local _left, _bottom = mppe_KeysFrame:GetLeft(), mppe_KeysFrame:GetBottom()
+    if not _left or not _bottom then return end
+    local _state = MythicPlusPageExtensionDB.GuildAndPartyKS_Window or {}
+    _state.left = _left
+    _state.bottom = _bottom
+    _state.width = mppe_KeysFrame:GetWidth()
+    _state.height = mppe_KeysFrame:GetHeight()
+    MythicPlusPageExtensionDB.GuildAndPartyKS_Window = _state
+end
+
+-- 恢复上次记忆的窗口位置/大小；无保存记录时返回 false（调用方保持默认居中 400x400）
+local function restoreWindowState()
+    if not MythicPlusPageExtensionDB or not mppe_KeysFrame then return false end
+    local _state = MythicPlusPageExtensionDB.GuildAndPartyKS_Window
+    if not _state or not _state.left or not _state.bottom or not _state.width or not _state.height then return false end
+    local _w = math.max(_state.width, 360)
+    local _h = math.max(_state.height, 300)
+    mppe_KeysFrame:SetSize(_w, _h)
+    -- 屏幕钳制：分辨率/缩放变化导致越界时夹回屏幕内
+    local _screenW = UIParent:GetWidth()
+    local _screenH = UIParent:GetHeight()
+    local _left = math.max(0, math.min(_state.left, _screenW - _w))
+    local _bottom = math.max(0, math.min(_state.bottom, _screenH - _h))
+    mppe_KeysFrame:ClearAllPoints()
+    mppe_KeysFrame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", _left, _bottom)
+    return true
+end
+
 -- 创建空窗口框架的函数（参考 WeeklyReport.lua 中 mppeFrame 的创建方式）
 local function createKeysFrame()
     _guildInitializing = true
@@ -34,6 +65,10 @@ local function createKeysFrame()
     mppe_KeysFrame:SetMovable(true)
     mppe_KeysFrame:EnableMouse(true)
     mppe_KeysFrame:SetClampedToScreen(true)
+    -- 窗体提升到 DIALOG 层：窗体背景与内容整体盖过 MEDIUM 层外部 UI，避免背景被遮挡、内容却悬浮其上的割裂
+    mppe_KeysFrame:SetFrameStrata("DIALOG")
+    -- 恢复上次记忆的窗口位置/大小（无保存记录时保持默认居中 400x400）
+    restoreWindowState()
     mppe_KeysFrame:SetScript("OnShow", function()
         _gksLog("[MPPE][GKS] OnShow") -- 追踪：窗口显示时机
         -- 重置首次快速刷新标记：本次打开首次收到回复用 0.5s 快速展示，后续请求 1.5s 节流
@@ -52,6 +87,7 @@ local function createKeysFrame()
         -- 初始化期间的初始 Hide()（createKeysFrame 末尾）不设置清空定时器
         if _guildInitializing then _guildInitializing = false return end
         _gksLog("[MPPE][GKS] OnHide") -- 追踪：窗口隐藏时机
+        saveWindowState() -- 关闭时保存当前窗口位置/大小（下次打开保持）
         -- 隐藏 10 秒后清空公会钥石缓存，避免脏数据遗留
         if _guildClearTimer then _guildClearTimer:Cancel() end
         _guildClearTimer = C_Timer.After(10, function()
@@ -90,9 +126,10 @@ local function createKeysFrame()
             self.startLeft, self.startBottom = mppe_KeysFrame:GetLeft(), mppe_KeysFrame:GetBottom()
             self.uiScale = mppe_KeysFrame:GetEffectiveScale()
             self:SetScript("OnUpdate", function(s)
-                -- 左键已释放则停止拖动
+                -- 左键已释放则停止拖动并保存窗口位置
                 if not IsMouseButtonDown("LeftButton") then
                     s:SetScript("OnUpdate", nil)
+                    saveWindowState()
                     return
                 end
                 local _curX, _curY = GetCursorPosition()
@@ -112,20 +149,21 @@ local function createKeysFrame()
     end)
     mppe_KeysFrame.titleBar = _titleBar
 
-    -- 关闭按钮（SettingsFrameTemplate 自带）
-    mppe_KeysFrame.ClosePanelButton:SetScript("OnClick", function()
+    -- 关闭按钮（SettingsFrameTemplate 自带；模板默认 L510 过高，统一降到窗体基准 +10，覆盖内容即可）
+    local _closeBtn = mppe_KeysFrame.ClosePanelButton
+    _closeBtn:SetFrameLevel(mppe_KeysFrame:GetFrameLevel() + 10)
+    _closeBtn:SetScript("OnClick", function()
         mppe_KeysFrame:Hide()
     end)
 
-    -- 刷新按钮（位置/尺寸以关闭按钮为基准：紧贴其左侧并同尺寸；使用红色刷新三态图集；抬高层级避免被顶部标题栏遮挡）
-    local _closeBtn = mppe_KeysFrame.ClosePanelButton
+    -- 刷新按钮（位置/尺寸以关闭按钮为基准：紧贴其左侧并同尺寸；使用红色刷新三态图集；与关闭按钮同层）
     local _refreshBtn = CreateFrame("Button", "MPPE_KS_RefreshBtn", mppe_KeysFrame)
     local _btnW, _btnH = _closeBtn:GetSize()
     _refreshBtn:SetSize(_btnW, _btnH)
     -- 右侧紧贴关闭按钮左侧（留 2px 间隙），垂直与关闭按钮居中
     _refreshBtn:SetPoint("RIGHT", _closeBtn, "LEFT", -2, 0)
-    -- 抬高层级到标题栏之上（标题栏覆盖顶部 28px，默认层级会拦截鼠标事件，导致点击/tooltip 失效）
-    _refreshBtn:SetFrameLevel(mppe_KeysFrame:GetFrameLevel() + 50)
+    -- 层级与关闭按钮一致（模板关闭按钮原为 L510，统一降到窗体+10 后两者同层，避免被标题栏/内容遮挡）
+    _refreshBtn:SetFrameLevel(_closeBtn:GetFrameLevel())
     -- 三态纹理：正常 / 按下 / 高亮（128-RedButton-Refresh 系列为图集，用 SetAtlas 系列方法）
     _refreshBtn:SetNormalAtlas("128-RedButton-Refresh")
     _refreshBtn:SetPushedAtlas("128-RedButton-Refresh-Pressed")
@@ -185,6 +223,7 @@ local function createKeysFrame()
                 if not IsMouseButtonDown("LeftButton") then
                     s:SetScript("OnUpdate", nil)
                     s:GetParent():StopMovingOrSizing()
+                    saveWindowState() -- 缩放结束：保存窗口大小/位置
                 end
             end)
         end
@@ -206,8 +245,8 @@ local function createKeysFrame()
         _gripTex:SetAlpha(gripDefaultAlpha)
         _gripTex:SetVertexColor(1, 1, 0.6)
     end)
-    -- 抬高手柄层级，确保不被滚动条等元素遮挡、可正常点击拖动
-    _grip:SetFrameLevel(mppe_KeysFrame:GetFrameLevel() + 20)
+    -- 抬高手柄层级：与关闭/刷新按钮同层（窗体+10），高于滚动轴/滚动条即可正常点击拖动
+    _grip:SetFrameLevel(mppe_KeysFrame:GetFrameLevel() + 10)
     mppe_KeysFrame.resizeGrip = _grip
 
     -- 窗口大小变化时自动调整内容布局（钥石列自适应）
@@ -221,21 +260,31 @@ local function createKeysFrame()
     return mppe_KeysFrame
 end
 
--- 打开/切换钥石窗口的统一入口（isTestMode 为 true 时演示数据；bToggle 为 true 且窗口已显示时隐藏）
-function mppe.GuildAndPartyKS_Open(isTestMode, bToggle)
-    -- 功能开关：GuildAndPartyKS_Enable 未启用时不执行
-    if not (MythicPlusPageExtensionDB and MythicPlusPageExtensionDB.GuildAndPartyKS_Enable) then
-        print("[MPPE] " .. (mppe.Translate['Guild/Party Keystones disabled. Enable it in Settings (/mppe).'] or "Guild/Party Keystones disabled. Enable it in Settings (/mppe)."))
-        return
-    end
+-- 打开/切换钥石窗口的统一入口（args: 斜杠命令参数；"test"=测试模式打开 | "restore"=重置窗口位置并显示 | 其他/nil=真实模式切换）
+function mppe.GuildAndPartyKS_Open(args)
+    -- 解析子命令参数：restore 为维护性命令，不受功能开关限制
+    local _sub = (type(args) == "string") and strlower(strtrim(args)) or ""
+    local _bRestore = _sub == "restore"
+    local _isTestMode = _sub == "test"
+    local _bToggle = not _bRestore and _sub ~= "test"
+    -- 功能开关：GuildAndPartyKS_Enable 未启用时不执行（restore 除外）
+    if not _bRestore and not (MythicPlusPageExtensionDB and MythicPlusPageExtensionDB.GuildAndPartyKS_Enable) then return end
     if not mppe_KeysFrame then mppe_KeysFrame = createKeysFrame() end
-    if bToggle and mppe_KeysFrame:IsShown() then
+    if _bToggle and mppe_KeysFrame:IsShown() then
         mppe_KeysFrame:Hide()
         return
     end
+    -- 重置模式：show 前清空位置记忆并应用默认位置/大小（恢复居中 400x400）
+    if _bRestore then
+        if MythicPlusPageExtensionDB then MythicPlusPageExtensionDB.GuildAndPartyKS_Window = nil end
+        mppe_KeysFrame:SetSize(400, 400)
+        mppe_KeysFrame:ClearAllPoints()
+        mppe_KeysFrame:SetPoint("CENTER")
+        updateLayout()
+    end
     mppe_KeysFrame:Show()
     -- Show 会触发 OnShow 刷新（真实模式），此处再按需覆盖为演示数据
-    mppe.GuildAndPartyKS_Refresh(isTestMode or false, true)
+    mppe.GuildAndPartyKS_Refresh(_isTestMode, true)
 end
 
 -- ==================================================================

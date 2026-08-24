@@ -774,28 +774,16 @@ rawset(SlashCmdList, "MPPE", function(msg)
 end)
 SLASH_MPPE1 = "/mppe"
 
+-- GuildAndPartyKS 扩展的斜杠命令：/mkeys 切换钥石窗口；/mkeys test 测试模式；/mkeys debug 调试
 rawset(SlashCmdList, "MKEYS", function(msg)
-    -- 只解析参数并调用统一入口（Enable 判断已在 GuildAndPartyKS_Open 内处理）
-    local _sub = strlower(strtrim(msg or ""))
-    if _sub == "test" then
-        mppe.GuildAndPartyKS_Open(true, false)
-    else
-        mppe.GuildAndPartyKS_Open(false, true)
-    end
+    -- 子命令解析已收敛到 GuildAndPartyKS_Open 内，此处仅透传命令参数
+    mppe.GuildAndPartyKS_Open(msg)
 end)
 SLASH_MKEYS1 = "/mkeys"
-
--- /key 命令：操作与 /mkeys 相同，但需设置 GuildAndPartyKS_SlashKey 为 true 才允许呼出
 rawset(SlashCmdList, "KEY", function(msg)
     if not (MythicPlusPageExtensionDB and MythicPlusPageExtensionDB.GuildAndPartyKS_SlashKey) then
         return
     end
-    -- 与 /mkeys 相同：test 参数进测试模式，否则切换窗口
-    local _sub = strlower(strtrim(msg or ""))
-    if _sub == "test" then
-        mppe.GuildAndPartyKS_Open(true, false)
-    else
-        mppe.GuildAndPartyKS_Open(false, true)
-    end
+    mppe.GuildAndPartyKS_Open(msg)
 end)
 SLASH_KEY1 = "/key"
