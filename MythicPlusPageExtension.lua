@@ -33,6 +33,7 @@ MythicPlusPageExtension:SetScript("OnEvent", function(self, event, addonName)
             ScoreNTeleport_DunLevel_FontSize = 22,
             ScoreNTeleport_DunScore_FontSize = 22,
             PartyKeyStone_Enable = true,
+            PartyInfo_ItemLevel = true,
             PartyKeyStone_ScoreColorStyle = "raiderio",
             PartyInfo_Width = 265,
             PartyKeyStone_xOffset = 0,

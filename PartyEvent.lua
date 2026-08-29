@@ -67,6 +67,8 @@ pe:SetScript("OnEvent", function(self, event, ...)
             pe:AKS_Callback(_message, _sender)
         elseif _prefix == mppe.MPPE_Channel:GetPrefix() then
             mppe.MPPE_Channel:OnMessage(_message, _sender)
+        -- elseif _prefix == "TinyInspect" then
+        --     pe:TinyInsp_Callback(_message, _sender)
         end
     end
 end)
@@ -184,6 +186,11 @@ function pe:AKS_Callback(message, fullName)
     end
 end
 
+-- function pe:TinyInsp_Callback(message, fullName)
+--     print("TinyInsp_CB", message, fullName)
+    
+-- end
+
 -- 请求全队信息（AKS/LKS/LOR 三方库）
 function mppe:RequestPartyInfo()
     if IsInGroup() and not IsInRaid() then
@@ -209,7 +216,14 @@ local PartyEvent_LFG = CreateFrame("Frame")
 PartyEvent_LFG:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
 PartyEvent_LFG:RegisterEvent("LFG_LIST_APPLICATION_STATUS_UPDATED")
 PartyEvent_LFG:RegisterEvent("LFG_LIST_JOINED_GROUP")
+PartyEvent_LFG:RegisterEvent("CHALLENGE_MODE_COMPLETED")
 PartyEvent_LFG:SetScript("OnEvent", function(self, event, ...)
+    if event == "CHALLENGE_MODE_COMPLETED" then
+        -- 副本完成：清空预创建队伍信息（离队 GROUP_LEFT 也会清；活动关闭不清，保留上次信息）
+        mppe.LFG_Info = {titleName = "", typeName = "", modeName = "", activityID = 0, groupFinderActivityGroupID = 0, mapID = 0}
+        mppe.RefreshPartyInfo("LFG_Complete")
+        return
+    end
     if event == "LFG_LIST_ACTIVE_ENTRY_UPDATE" or event == "LFG_LIST_APPLICATION_STATUS_UPDATED" or event == "LFG_LIST_JOINED_GROUP" then
         C_Timer.After(0.5, function() PartyEvent_LFG:Update() end)
     end
@@ -220,15 +234,30 @@ function PartyEvent_LFG:Update()
     if IsInGroup() and not IsInRaid() then
         local _activeEntry = C_LFGList.GetActiveEntryInfo()
         if _activeEntry then
-            mppe.LFG_Info.titleName = tostring(_activeEntry.name) or ""
-            if _activeEntry.activityIDs and #_activeEntry.activityIDs > 0 then
-                mppe.LFG_Info.activityID = _activeEntry.activityIDs[1]
-                local _activityInfo = C_LFGList.GetActivityInfoTable(mppe.LFG_Info.activityID)
-                mppe.LFG_Info.typeName = _activityInfo.fullName or ""
-                mppe.LFG_Info.modeName = _activityInfo.shortName or ""
-                mppe.LFG_Info.groupFinderActivityGroupID = _activityInfo.groupFinderActivityGroupID or 0
-                mppe.LFG_Info.mapID = _activityInfo.mapID or 0
+            -- 遍历所有活动：优先取"大秘境活动且 mapID>0"的一项，兜底取第一项；GetActivityInfoTable 可能返回 nil
+            local _bestAID, _bestInfo
+            for _, _aid in ipairs(_activeEntry.activityIDs or {}) do
+                local _info = C_LFGList.GetActivityInfoTable(_aid)
+                if _info then
+                    if not _bestInfo then _bestAID, _bestInfo = _aid, _info end
+                    if _info.isMythicPlusActivity and (_info.mapID or 0) > 0 then
+                        _bestAID, _bestInfo = _aid, _info
+                        break
+                    end
+                end
+            end
+            -- 仅成功解析到活动才整体覆盖；活动关闭（GetActiveEntryInfo 为 nil 或解析失败）时保留上次信息，不清空
+            if _bestInfo then
+                mppe.LFG_Info.titleName = tostring(_activeEntry.name) or ""
+                mppe.LFG_Info.activityID = _bestAID
+                mppe.LFG_Info.typeName = _bestInfo.fullName or ""
+                mppe.LFG_Info.modeName = _bestInfo.shortName or ""
+                mppe.LFG_Info.groupFinderActivityGroupID = _bestInfo.groupFinderActivityGroupID or 0
+                mppe.LFG_Info.mapID = _bestInfo.mapID or 0
+                --print(string.format("MPPE LFG: aid=%d fullName=%s mapID=%d isM+=%s ownKS=%s", _bestAID, tostring(_bestInfo.fullName), mppe.LFG_Info.mapID, tostring(_bestInfo.isMythicPlusActivity), tostring(C_MythicPlus.GetOwnedKeystoneChallengeMapID())))
             end
         end
     end
+    -- LFG 信息变化后刷新小队信息，钥石颜色提示随活动副本及时更新
+    mppe.RefreshPartyInfo("LFG")
 end

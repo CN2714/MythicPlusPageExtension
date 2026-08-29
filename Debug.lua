@@ -45,9 +45,20 @@ mppe.Debug.selectedMember = nil   -- 下拉框选中的队友序号
 mppe.Debug.inspectTarget = nil    -- 观察目标 { unit, guid, name, index }
 
 -- 控件引用（懒初始化后填充）
-local DebugFrame, DbPanel, InspPanel, TabDB, TabInsp
+local DebugFrame, DbPanel, InspPanel, AssetPanel, TabDB, TabInsp, TabAsset
 local DbScrollFrame, DbScrollChild, InspScrollFrame, InspScrollChild, InspStatusText
 local MemberDropdown
+local AssetFilterInput                          -- 素材筛选输入框
+local AssetScrollFrame, AssetScrollChild        -- 素材网格滚动区
+local AssetStatusText                           -- 底部状态文本
+local AssetAll = {}                             -- 全部 Atlas 名（首次构建时缓存）
+local AssetList = {}                            -- 当前筛选后的 atlas 名数组
+local AssetListCount = 0
+local AssetCells = {}                           -- 网格单元格复用池（虚拟化）
+local AssetCellSize = 72                        -- 单元格尺寸
+local AssetCellPitch = 78                       -- 单元格间距（含边距）
+local AssetFilter = ""                          -- 当前筛选关键字（小写）
+local getAssetCell, renderAssetGrid, applyAssetFilter -- 前向声明（showPanel/getAssetCell 相互引用）
 local FrameInitialized = false
 local Inspecting = false
 local InspectTimeout = nil
@@ -464,12 +475,17 @@ local function createTabButton(parent, text, anchorX, anchorY)
     return _btn
 end
 
--- 切换标签页高亮
-local function setActiveTab(activeBtn, inactiveBtn)
-    activeBtn:SetBackdropColor(0.25, 0.35, 0.55, 0.9)
-    activeBtn.Text:SetTextColor(1, 1, 1)
-    inactiveBtn:SetBackdropColor(0.12, 0.12, 0.12, 0.7)
-    inactiveBtn.Text:SetTextColor(0.7, 0.7, 0.7)
+-- 切换标签页高亮（activeBtn 高亮，其余变暗）
+local function setActiveTab(activeBtn, ...)
+    for _, _btn in ipairs({ ... }) do
+        if _btn == activeBtn then
+            _btn:SetBackdropColor(0.25, 0.35, 0.55, 0.9)
+            _btn.Text:SetTextColor(1, 1, 1)
+        else
+            _btn:SetBackdropColor(0.12, 0.12, 0.12, 0.7)
+            _btn.Text:SetTextColor(0.7, 0.7, 0.7)
+        end
+    end
 end
 
 -- 切换显示面板
@@ -477,13 +493,126 @@ local function showPanel(which)
     if which == "db" then
         DbPanel:Show()
         InspPanel:Hide()
-        setActiveTab(TabDB, TabInsp)
+        AssetPanel:Hide()
+        setActiveTab(TabDB, TabInsp, TabAsset)
         refreshDbTree()
-    else
+    elseif which == "insp" then
         DbPanel:Hide()
         InspPanel:Show()
-        setActiveTab(TabInsp, TabDB)
+        AssetPanel:Hide()
+        setActiveTab(TabInsp, TabDB, TabAsset)
+    else
+        DbPanel:Hide()
+        InspPanel:Hide()
+        AssetPanel:Show()
+        setActiveTab(TabAsset, TabDB, TabInsp)
+        renderAssetGrid()
     end
+end
+
+-- 获取/创建池化的素材网格单元格（悬停用 GameTooltip 显示素材的 ID 等信息）
+getAssetCell = function(slot)
+    local _cell = AssetCells[slot]
+    if _cell then return _cell end
+    _cell = CreateFrame("Button", nil, AssetScrollChild, "BackdropTemplate")
+    _cell:SetSize(AssetCellSize, AssetCellSize)
+    _cell:SetBackdrop({
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+        bgColor = { 0, 0, 0, 0.35 },
+        edgeColor = { 0.3, 0.3, 0.3, 1 },
+    })
+    _cell.Tex = _cell:CreateTexture(nil, "ARTWORK")
+    _cell.Tex:SetPoint("TOPLEFT", _cell, "TOPLEFT", 2, -2)
+    _cell.Tex:SetPoint("BOTTOMRIGHT", _cell, "BOTTOMRIGHT", -2, 2)
+    -- 悬停：显示素材名称 / 元素ID(FileID) / AtlasID / 尺寸 / 贴图路径
+    _cell:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(1, 1, 1, 0.18)
+        local _name = self.atlasName
+        if not _name then return end
+        local _info = C_Texture.GetAtlasInfo(_name)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(_name, 1, 1, 1)
+        if _info then
+            GameTooltip:AddLine(string.format("元素ID(FileID)：%d", C_Texture.GetAtlasElementID(_name) or 0))
+            GameTooltip:AddLine(string.format("AtlasID：%d", C_Texture.GetAtlasID(_name) or 0))
+            GameTooltip:AddLine(string.format("尺寸：%dx%d", _info.width or 0, _info.height or 0))
+            if _info.file then GameTooltip:AddLine(string.format("父贴图 FileID：%d", _info.file)) end
+            if _info.filename then GameTooltip:AddLine(string.format("贴图：%s", _info.filename)) end
+        end
+        GameTooltip:Show()
+    end)
+    _cell:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(0, 0, 0, 0.35)
+        GameTooltip:Hide()
+    end)
+    -- 左键：把素材名填入筛选框，便于继续定位/筛选
+    _cell:SetScript("OnClick", function(self)
+        if self.atlasName and AssetFilterInput then
+            AssetFilterInput:SetText(self.atlasName)
+            applyAssetFilter()
+        end
+    end)
+    AssetCells[slot] = _cell
+    return _cell
+end
+
+-- 虚拟化渲染网格：只创建/摆放视口内的单元格，滚动或拖动滚动条时重建可见区
+renderAssetGrid = function()
+    if not AssetScrollFrame or not AssetScrollChild then return end
+    local _cols = math.max(1, math.floor((AssetScrollFrame:GetWidth() or 400) / AssetCellPitch))
+    local _rows = math.ceil((AssetScrollFrame:GetHeight() or 300) / AssetCellPitch)
+    local _poolNeeded = _cols * (_rows + 1)
+
+    -- 确保复用池足够（只在不足时新建）
+    for _i = #AssetCells + 1, _poolNeeded do getAssetCell(_i) end
+
+    -- 内容总高度 = 总行数 * 行距
+    local _totalRows = math.max(1, math.ceil(AssetListCount / _cols))
+    AssetScrollChild:SetHeight(_totalRows * AssetCellPitch + 10)
+    AssetScrollFrame:UpdateScrollChildRect()
+
+    -- 计算可见起始行，摆放池内格子
+    local _topRow = math.max(0, math.floor(AssetScrollFrame:GetVerticalScroll() / AssetCellPitch))
+    for _slot = 1, _poolNeeded do
+        local _cell = AssetCells[_slot]
+        local _row = _topRow + math.floor((_slot - 1) / _cols)
+        local _col = (_slot - 1) % _cols
+        local _item = _row * _cols + _col + 1
+        if _item <= AssetListCount then
+            local _name = AssetList[_item]
+            _cell:Show()
+            _cell.atlasName = _name
+            _cell.Tex:SetAtlas(_name)
+            _cell:ClearAllPoints()
+            _cell:SetPoint("TOPLEFT", AssetScrollChild, "TOPLEFT", 4 + _col * AssetCellPitch, -(_row * AssetCellPitch))
+        else
+            _cell:Hide()
+        end
+    end
+
+    if AssetStatusText then
+        AssetStatusText:SetText(string.format("共 %d 个素材，每行 %d 个。悬停查看 ID 等信息，左键填入筛选框。", AssetListCount, _cols))
+    end
+end
+
+-- 根据筛选框关键字重建素材列表（关键字为空则显示全部）
+applyAssetFilter = function()
+    if not AssetFilterInput then return end
+    AssetFilter = strlower(strtrim(AssetFilterInput:GetText() or ""))
+    AssetList = {}
+    if AssetFilter == "" then
+        AssetList = AssetAll
+    else
+        for _, _name in ipairs(AssetAll) do
+            if strfind(strlower(_name), AssetFilter, 1, true) then
+                AssetList[#AssetList + 1] = _name
+            end
+        end
+    end
+    AssetListCount = #AssetList
+    AssetScrollFrame:SetVerticalScroll(0)
+    renderAssetGrid()
 end
 
 -- 下拉框初始化：列出当前队伍成员
@@ -540,8 +669,10 @@ local function initDebugFrame()
     -- 标签页
     TabDB = createTabButton(DebugFrame, "PartyDB", 10, -28)
     TabInsp = createTabButton(DebugFrame, "INSP 观察", 138, -28)
+    TabAsset = createTabButton(DebugFrame, "素材浏览", 266, -28)
     TabDB:SetScript("OnClick", function() showPanel("db") end)
     TabInsp:SetScript("OnClick", function() showPanel("insp") end)
+    TabAsset:SetScript("OnClick", function() showPanel("asset") end)
 
     -- 内容面板（无白边框，透明边缘）
     local _backdrop = {
@@ -559,6 +690,11 @@ local function initDebugFrame()
     InspPanel:SetPoint("TOPLEFT", DbPanel, "TOPLEFT")
     InspPanel:SetPoint("BOTTOMRIGHT", DbPanel, "BOTTOMRIGHT")
     InspPanel:SetBackdrop(_backdrop)
+
+    AssetPanel = CreateFrame("Frame", "MPPE_DebugAsset_Panel", DebugFrame, "BackdropTemplate")
+    AssetPanel:SetPoint("TOPLEFT", DbPanel, "TOPLEFT")
+    AssetPanel:SetPoint("BOTTOMRIGHT", DbPanel, "BOTTOMRIGHT")
+    AssetPanel:SetBackdrop(_backdrop)
 
     -- ==================================================
     -- DB 面板：标题 + 刷新按钮 + 滚动树
@@ -632,13 +768,59 @@ local function initDebugFrame()
     InspScrollFrame:SetScrollChild(InspScrollChild)
     InspScrollChild:SetWidth(DebugScrollWidth)
 
+    -- ==================================================
+    -- 素材浏览面板：遍历全部 Atlas 素材的虚拟化网格画廊
+    -- ==================================================
+    -- 首次构建时缓存全部 Atlas 名（一次性枚举）
+    AssetAll = C_Texture.GetAtlasElements() or {}
+    local _assetHeader = AssetPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    _assetHeader:SetPoint("TOPLEFT", AssetPanel, "TOPLEFT", 8, -6)
+    _assetHeader:SetText(string.format("游戏内图片素材浏览（共 %d 个 Atlas）", #AssetAll))
+
+    AssetFilterInput = CreateFrame("EditBox", "MPPE_DebugAsset_Filter", AssetPanel, "InputBoxTemplate")
+    AssetFilterInput:SetAutoFocus(false)
+    AssetFilterInput:SetHeight(24)
+    AssetFilterInput:SetPoint("TOPLEFT", AssetPanel, "TOPLEFT", 8, -28)
+    AssetFilterInput:SetPoint("RIGHT", AssetPanel, "RIGHT", -70, 0)
+    AssetFilterInput:SetScript("OnEnterPressed", function(self) self:ClearFocus() applyAssetFilter() end)
+    AssetFilterInput:SetScript("OnTextChanged", function(self) applyAssetFilter() end)
+
+    local _assetFilterBtn = CreateFrame("Button", nil, AssetPanel, "UIPanelButtonTemplate")
+    _assetFilterBtn:SetSize(56, 22)
+    _assetFilterBtn:SetPoint("TOPRIGHT", AssetPanel, "TOPRIGHT", -8, -28)
+    _assetFilterBtn:SetText("筛选")
+    _assetFilterBtn:SetScript("OnClick", function() applyAssetFilter() end)
+
+    AssetScrollFrame = CreateFrame("ScrollFrame", "MPPE_DebugAsset_Scroll", AssetPanel, "ScrollFrameTemplate")
+    AssetScrollFrame:SetPoint("TOPLEFT", AssetPanel, "TOPLEFT", 6, -56)
+    AssetScrollFrame:SetPoint("BOTTOMRIGHT", AssetPanel, "BOTTOMRIGHT", -6, -22)
+    AssetScrollFrame:EnableMouseWheel(true)
+    -- 滚动/拖滚动条时重建可见区（HookScript 保留模板自带的滚动条联动）
+    AssetScrollFrame:HookScript("OnVerticalScroll", function(self, offset) renderAssetGrid() end)
+
+    AssetScrollChild = CreateFrame("Frame", "MPPE_DebugAsset_ScrollChild", AssetScrollFrame)
+    AssetScrollFrame:SetScrollChild(AssetScrollChild)
+    AssetScrollChild:SetWidth(DebugScrollWidth)
+
+    AssetStatusText = AssetPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    AssetStatusText:SetPoint("BOTTOMLEFT", AssetPanel, "BOTTOMLEFT", 8, 6)
+    AssetStatusText:SetPoint("BOTTOMRIGHT", AssetPanel, "BOTTOMRIGHT", -8, 6)
+    AssetStatusText:SetHeight(14)
+    AssetStatusText:SetJustifyH("LEFT")
+    AssetStatusText:SetJustifyV("BOTTOM")
+    AssetStatusText:SetText("加载中...")
+
+    applyAssetFilter()
+
     -- 窗体尺寸变化：滚动内容宽度自适应并重绘
     DebugFrame:SetScript("OnSizeChanged", function(self)
         local _w = self:GetWidth()
         if DbScrollChild then DbScrollChild:SetWidth(_w - 40) end
         if InspScrollChild then InspScrollChild:SetWidth(_w - 40) end
+        if AssetScrollChild then AssetScrollChild:SetWidth(_w - 40) end
         renderDbList()
         renderInspResult()
+        renderAssetGrid()
     end)
 
     -- 右下角调整大小手柄

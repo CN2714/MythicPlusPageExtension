@@ -128,311 +128,6 @@ local function GenerateDungeonRunsInfo(memberList, dungeonId)
     return table.concat(textParts, "")
 end
 
--- local function GeneratePartyInfo()  
---     local weeklyChest = ChallengesFrame.WeeklyInfo.Child.WeeklyChest
---     weeklyChest:ClearAllPoints()
---     weeklyChest:SetPoint("LEFT", 100, 0)
---     local description = ChallengesFrame.WeeklyInfo.Child.WeeklyChest.RunStatus
---     description:SetWordWrap(true)
---     description:SetSize(200, 90)
-
---     local xoffset = MythicPlusPageExtensionDB.PartyKeyStone_xOffset and MythicPlusPageExtensionDB.PartyKeyStone_xOffset or 0
---     local yoffset = MythicPlusPageExtensionDB.PartyKeyStone_yOffset and MythicPlusPageExtensionDB.PartyKeyStone_yOffset or 0
---     local pCount = 1
---     if IsInGroup() then
---         pCount = GetNumGroupMembers()
---     end
-
---     local PartyInfoFrame = _G["mppePartyInfoFrame"] or CreateFrame("Frame" ,"mppePartyInfoFrame", ChallengesFrame)
---     ClearFrameContents(PartyInfoFrame) -- 关键：每次运行都先清空
---     PartyInfoFrame:SetSize(265, 135)
---     PartyInfoFrame:SetPoint("BOTTOMRIGHT", ChallengesFrame, "BOTTOMRIGHT", -10 + xoffset, 75 + yoffset)
---     PartyInfoFrame:Show() -- 确保显示
-    
---     local pif_bg = PartyInfoFrame:CreateTexture(nil, "BACKGROUND")
---     pif_bg:SetAllPoints()
---     pif_bg:SetAtlas("ChallengeMode-guild-background")
-    
---     local pif_refresh
-
---     local pif_title = PartyInfoFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
---     pif_title:SetPoint("TOPLEFT", 5, -5)
---     pif_title:SetText(mppe.Translate['PartyInfo'])
---     pif_title:SetFont("GameFontNormal", 50, "OUTLINE")
-
---     local pif_lfgTitle = PartyInfoFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
---     pif_lfgTitle:SetPoint("TOPRIGHT", -5, -5)
---     pif_lfgTitle:SetSize(150,pif_title:GetHeight())
---     pif_lfgTitle:SetText(mppe.LFG_Info and mppe.LFG_Info.typeName)
---     pif_lfgTitle:SetFont("GameFontNormal", 50, "OUTLINE")
---     pif_lfgTitle:SetTextColor(1,1,1,1)
---     local _lfgTooltip = mppe.LFG_Info.titleName or nil
---     pif_lfgTitle:SetScript("OnEnter", function(self)
---         if _lfgTooltip then
---             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
---             GameTooltip:SetText(_lfgTooltip)
---             GameTooltip:Show()
---         end
---     end)
---     pif_lfgTitle:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
-
---     local pif_line = PartyInfoFrame:CreateTexture(nil, "ARTWORK")
---     pif_line:SetSize(PartyInfoFrame:GetWidth(), 1)
---     pif_line:SetAtlas("spec-dividerline", false)
---     pif_line:SetPoint("TOP", PartyInfoFrame, "TOP", 0, -22)
-
---     local _, _Realm = UnitFullName("Player")
---     local _pMember = {}
---     for i = 1, pCount do
---         local _player = {
---             name = "",
---             realm = "",
---             fullName = "",
---             NameRealm = "",
---             bYou = false,
---             bSameRealm = false,
---             bLeader = false,           
---             class = "",
---             spec = 0,
---             hexColor = "",
---             role = "",
---             roleId = 9,
---             score = 0,
---             runs = {},
---             ksLv = 0,
---             ksId = 0,
---             iLv = nil,
---             -- bHaveThis = false,
---         }
---         if i == 1 then _player.name, _player.realm = UnitFullName("Player") _player.bYou = true
---         else _player.name, _player.realm = UnitFullName("Party"..tostring(i-1)) end
---         if not _player.realm then _player.realm = _Realm end
---         _player.bSameRealm = (_Realm == _player.realm)
---         if _player.bSameRealm then _player.fullName = _player.name else _player.fullName = string.format("%s-%s", _player.name, _player.realm) end
---         _player.NameRealm = string.format("%s-%s", _player.name, _player.realm)
---         _player.bLeader = UnitIsGroupLeader(_player.fullName)
---         _, _player.class, _ = UnitClass(_player.fullName)
---         if _player.bYou then 
---             _player.spec = C_SpecializationInfo.GetSpecializationInfo(C_SpecializationInfo.GetSpecialization()) 
---             _player.ksId = C_MythicPlus.GetOwnedKeystoneChallengeMapID() or 0
---             _player.ksLv = C_MythicPlus.GetOwnedKeystoneLevel() or 0
---             _, _player.iLv, _ = GetAverageItemLevel()
---         else  
---             local playerData = mppe.PartyKeystone[_player.NameRealm]
---             if playerData then 
---                 _player.ksId =  playerData.ksId or 0
---                 _player.ksLv = playerData.ksLv or 0
---                 _player.score = playerData.rating or 0
---                 _player.iLv = playerData.iLv
---                 _player.spec = playerData.specId or 0
-                
---             end
---         end
---         local _classSpec = mppe.ClassSpec[_player.class]
---         if _classSpec then _player.hexColor = mppe.ClassSpec[_player.class][0].color else _player.hexColor = "ffffffff" end
---         _player.role = UnitGroupRolesAssigned(_player.fullName)
---         if _player.role == "TANK" then _player.roleId = 1 elseif _player.role == "HEALER" then _player.roleId = 2 elseif _player.role == "DAMAGER" then _player.roleId = 3 end
---         _pMember[i] = _player
---         local _playerMythicPlusRatingSummary = C_PlayerInfo.GetPlayerMythicPlusRatingSummary(_player.fullName)
---         _player.runs = _playerMythicPlusRatingSummary and _playerMythicPlusRatingSummary.runs
---         --_player.runs = mppe.PartyBest and mppe.PartyBest[_player.fullName].runs
---         _player.score = _playerMythicPlusRatingSummary and _playerMythicPlusRatingSummary.currentSeasonScore or _player.score
---         _player.runsList, _player.runsMap = MythicRunsDunFiller(_player.runs or {})
---         --mppe.DebugPrint(_player)
---     end
---     table.sort(_pMember, function(a, b)
---         if a.bYou ~= b.bYou then return a.bYou end
---         if a.roleId ~= b.roleId then return a.roleId < b.roleId end
---         return a.name < b.name
---     end)
-
---     local pif_Member = {}
---     for i, _p in ipairs(_pMember) do        
---         local party = CreateFrame("Frame", nil, PartyInfoFrame)
---         party:SetSize(PartyInfoFrame:GetWidth(), 21.5)
---         if i == 1 then 
---             party:SetPoint("TOP",pif_line,"BOTTOM", 0, -2)
---         else 
---             party:SetPoint("TOP",pif_Member[i-1],"BOTTOM", 0, 0)
---         end
-
---         -- 添加高亮背景
---         local highlight = party:CreateTexture(nil, "BACKGROUND")
---         highlight:SetAllPoints(party)
---         highlight:SetColorTexture(1, 1, 1, 0.1) -- 半透明白色
---         highlight:Hide()
---         party.highlight = highlight
-        
---         -- 鼠标计数器
---         party.mouseOverCount = 0
-        
---         -- 函数：增加鼠标计数并显示高亮
---         local function AddMouseOver(self)
---             self.mouseOverCount = self.mouseOverCount + 1
---             if self.mouseOverCount == 1 then
---                 self.highlight:Show()
---             end
---         end
-        
---         -- 函数：减少鼠标计数并可能隐藏高亮
---         local function RemoveMouseOver(self)
---             self.mouseOverCount = math.max(0, self.mouseOverCount - 1)
---             if self.mouseOverCount == 0 then
---                 self.highlight:Hide()
---             end
---         end
-
---         _p.ksId = tonumber(_p.ksId)
---         _p.ksLv = tonumber(_p.ksLv)
---         if type(_p.ksId) ~= "number" then _p.ksId = 0 end
---         if type(_p.ksLv) ~= "number" then _p.ksLv = 0 end
---         party.pRecordTooltip = GeneratePlayerRunsInfo(_p.name, _p.realm, _p.score, _p.hexColor, _p.runsList)
---         party.dRecordTooltip = GenerateDungeonRunsInfo(_pMember, _p.ksId)
-
---         local _, _specName, _, _pIconId, _specRole, _, _className = GetSpecializationInfoByID(_p.spec)
-
---         if not _specName then 
---             _specName = mppe.Translate[((mppe.ClassSpec[_p.class] or {})[_p.spec] or (mppe.ClassSpec[_p.class] or {})[0] or {}).name or "UNKNOWN"] 
---         end
---         if not _pIconId then 
---             _pIconId = ((mppe.ClassSpec[_p.class] or {})[_p.spec] or (mppe.ClassSpec[_p.class] or {})[0] or {}).icon or 0 
---         end
---         if not _specRole then 
---             _specRole = mppe.Translate['UNKNOWN'] 
---         end
---         if not _className then 
---             _className = mppe.Translate[_p.class] 
---         end
-
---         local pIcon = party:CreateTexture(nil, "OVERLAY")        
---         pIcon:SetSize(20, 20)
---         pIcon:SetPoint("LEFT",party,"LEFT", 16, 0)
---         if tonumber(_pIconId) then 
---             pIcon:SetTexture(_pIconId) 
---         else 
---             pIcon:SetAtlas(_pIconId) 
---         end
---         pIcon.tooltipText = string.format("%s(%s) %s", _specName, mppe.Translate[_specRole], _className)
---         pIcon:SetScript("OnEnter", function(self)
---             AddMouseOver(self:GetParent())
---             if self.tooltipText then
---                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
---                 GameTooltip:SetText(self.tooltipText)
---                 GameTooltip:Show()
---             end
---         end)
---         pIcon:SetScript("OnLeave", function(self)
---             RemoveMouseOver(self:GetParent())
---             GameTooltip:Hide()
---         end)
-        
---         local pRole = party:CreateTexture(nil, "ARTWORK")
---         pRole:SetSize(20, 20)
---         if _specRole == "TANK" then 
---             _specRole = 1 
---         elseif _specRole == "HEALER" then 
---             _specRole = 2 
---         else 
---             _specRole = 3 
---         end
---         local _roleId = (_p.roleId == 9 and _specRole) and _specRole or _p.roleId
---         if _roleId == 1 then 
---             pRole:SetAtlas("GM-icon-role-tank", false)
---         elseif _roleId == 2 then 
---             pRole:SetAtlas("GM-icon-role-healer", false)
---         else 
---             pRole:SetAtlas("GM-icon-role-dps", true) 
---         end
---         pRole:SetPoint("RIGHT",pIcon,"LEFT", 3, -1)
---         pRole:SetTexCoord(1, 0, 0, 1)
---         local pLeader = party:CreateTexture(nil, "ARTWORK")
---         pLeader:SetSize(14, 14)
---         if _p.bLeader then 
---             pLeader:SetAtlas("plunderstorm-glues-icon-leader", false)
---             pLeader:SetPoint("BOTTOM",pRole,"TOP", 0, -9)
---             pRole:SetPoint("RIGHT",pIcon,"LEFT", 3, -3)
---         end
-
---         local _name = _p.name
---         _p.iLv = tonumber(_p.iLv)
---         if type(_p.iLv) ~= "number" then _p.iLv = "" else _name = string.format("%d|T:1:1|t|||T:1:1|t%s", _p.iLv, _name) end
---         local pName = party:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")        
---         pName:SetWordWrap(false)
---         pName:SetJustifyH("LEFT")
---         pName:SetPoint("LEFT",pIcon,"RIGHT", 0, 0)
---         pName:SetText(_name)
---         pName:SetWidth(party:GetWidth()/2 - 20)
---         pName:SetTextColor(mppe.ColorHexToRGBA(_p.hexColor))
---         pName:SetScript("OnEnter", function(self)
---             AddMouseOver(self:GetParent())
---             if self:GetParent().pRecordTooltip then
---                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
---                 GameTooltip:AddLine(self:GetParent().pRecordTooltip)
---                 GameTooltip:Show()
---             end
---         end)
---         pName:SetScript("OnLeave", function(self)
---             RemoveMouseOver(self:GetParent())
---             GameTooltip:Hide()
---         end)
-
---         -- _p.iLv = tonumber(_p.iLv)
---         -- print(_p.iLv)
---         -- if type(_p.iLv) ~= "number" then _p.iLv = "" else string.format("(%d)",_p.iLv) end
---         -- local piLv = party:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
---         -- piLv:SetWidth(40)
---         -- piLv:SetWordWrap(false)
---         -- piLv:SetJustifyH("LEFT")
---         -- piLv:SetPoint("LEFT",pName,"RIGHT", 0, 0)
---         -- piLv:SetText(_p.iLv)
---         -- piLv:SetScript("OnEnter", function(self)
---         --     if self:GetParent().pRecordTooltip then
---         --         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
---         --         GameTooltip:SetText(self:GetParent().pRecordTooltip)
---         --         GameTooltip:Show()
---         --     end
---         -- end)
---         -- piLv:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
-
---         local _pks = ""
---         if _p.ksId > 0 then
---             _pks = string.format("%s%s",(_p.ksLv > 0 and _p.ksLv or ""), mppe.Translate[mppe.Dungeons[_p.ksId].Name])
---         end
-
---         local pKs = party:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
---         pKs:SetWidth(party:GetWidth()/2 - 20)
---         pKs:SetWordWrap(false)
---         pKs:SetPoint("RIGHT", party, "RIGHT", -2, 0)
---         pKs:SetPoint("LEFT", pName, "RIGHT", 2, 0)
---         pKs:SetJustifyH("RIGHT")
---         pKs:SetText(_pks)
---         pKs:SetScript("OnEnter", function(self)
---             AddMouseOver(self:GetParent())
---             if self:GetParent().dRecordTooltip and self:GetParent().dRecordTooltip ~= "" then
---                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
---                 GameTooltip:SetText(self:GetParent().dRecordTooltip)
---                 GameTooltip:Show()
---             end
---         end)
---         pKs:SetScript("OnLeave", function(self) 
---             RemoveMouseOver(self:GetParent())
---             GameTooltip:Hide()
---         end)
-        
---         -- 父框架的鼠标事件
---         party:SetScript("OnEnter", function(self)
---             AddMouseOver(self)
---         end)
-        
---         party:SetScript("OnLeave", function(self)
---             RemoveMouseOver(self)
---         end)
-        
---         pif_Member[i] = party
---     end
---     PartyInfoFrame.Member = pif_Member
--- end
-
 local function GeneratePartyInfoV2()  
     -- REF AngryKeystones
     local _weeklyChest = ChallengesFrame.WeeklyInfo.Child.WeeklyChest
@@ -462,8 +157,6 @@ local function GeneratePartyInfoV2()
     pif_bg:SetAllPoints()
     pif_bg:SetAtlas("ChallengeMode-guild-background")
     
-    local pif_refresh
-
     local pif_title = PartyInfoFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     pif_title:SetPoint("TOPLEFT", 5, -5)
     pif_title:SetText(mppe.Translate['PartyInfo'])
@@ -645,12 +338,17 @@ local function GeneratePartyInfoV2()
         end
 
         local _name = _p.name
-        _p.iLv = tonumber(_p.iLv)
-        if _p.iLv and _p.iLv > 0 then
-            _name = string.format("%d|T:1:1|t|||T:1:1|t%s", _p.iLv, _name)
+        -- 设置项 PartyInfo_ItemLevel 为真时才显示装等，否则不加装等前缀
+        if MythicPlusPageExtensionDB.PartyInfo_ItemLevel then
+            _p.iLv = tonumber(_p.iLv)
+            if _p.iLv and _p.iLv > 0 then
+                _name = string.format("%d|T:1:1|t|||T:1:1|t%s", _p.iLv, _name)
+            else
+                -- 装等未知：用灰色问号占位
+                _name = string.format("|c00707070...|r|T:1:1|t|||T:1:1|t%s", _name)
+            end
         else
-            -- 装等未知：用灰色问号占位
-            _name = string.format("|c00707070...|r|T:1:1|t|||T:1:1|t%s", _name)
+             _name = string.format("|T:1:1|t%s", _name)
         end
         local pName = party:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")        
         pName:SetWordWrap(false)
@@ -672,24 +370,6 @@ local function GeneratePartyInfoV2()
             GameTooltip:Hide()
         end)
 
-        -- _p.iLv = tonumber(_p.iLv)
-        -- print(_p.iLv)
-        -- if type(_p.iLv) ~= "number" then _p.iLv = "" else string.format("(%d)",_p.iLv) end
-        -- local piLv = party:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-        -- piLv:SetWidth(40)
-        -- piLv:SetWordWrap(false)
-        -- piLv:SetJustifyH("LEFT")
-        -- piLv:SetPoint("LEFT",pName,"RIGHT", 0, 0)
-        -- piLv:SetText(_p.iLv)
-        -- piLv:SetScript("OnEnter", function(self)
-        --     if self:GetParent().pRecordTooltip then
-        --         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        --         GameTooltip:SetText(self:GetParent().pRecordTooltip)
-        --         GameTooltip:Show()
-        --     end
-        -- end)
-        -- piLv:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
-
         local _pks = ""
         if _p.ksId > 0 and mppe.Dungeons[_p.ksId] then
             _pks = string.format("%s%s",(_p.ksLv > 0 and _p.ksLv or ""), mppe.Translate[mppe.Dungeons[_p.ksId].Name])
@@ -702,6 +382,16 @@ local function GeneratePartyInfoV2()
         pKs:SetPoint("LEFT", pName, "RIGHT", 2, 0)
         pKs:SetJustifyH("RIGHT")
         pKs:SetText(_pks)
+        -- 钥石与预创建队伍活动副本一致时，钥石文本变黄（提示"这本=谁的钥匙"）
+        -- 注意：钥石是 challengeModeID，活动是 mapID，先经 GetMapUIInfo 归一化到 mapID 再比较
+        local _ksMapID = 0
+        if _p.ksId and _p.ksId > 0 then
+            local _, _id, _, _, _, _mapID = C_ChallengeMode.GetMapUIInfo(_p.ksId)
+            _ksMapID = _mapID or _id or 0
+        end
+        if _ksMapID > 0 and mppe.LFG_Info and _ksMapID == (mppe.LFG_Info.mapID or 0) then
+            pKs:SetTextColor(1, 1, 0.39) -- 黄色            
+        end
         pKs:SetScript("OnEnter", function(self)
             AddMouseOver(self:GetParent())
             if self:GetParent().dRecordTooltip and self:GetParent().dRecordTooltip ~= "" then

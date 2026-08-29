@@ -205,7 +205,7 @@ settings_Tabs.SettingsList = {
             {
                 db = "ScoreNTeleport_ScoreColorStyle",
                 name = "Score Text Color Style",
-                type = "ComboBox", 
+                type = "ComboBoxV2", 
                 indent = 1,
                 value = {
                     default = "highestlv",
@@ -233,7 +233,7 @@ settings_Tabs.SettingsList = {
             {
                 db = "ScoreNTeleport_STI_CastStatus",
                 name = "Send message when",
-                type = "ComboBox", 
+                type = "ComboBoxV2", 
                 indent = 2,
                 value = {
                     default = "castsucceeded",
@@ -252,7 +252,7 @@ settings_Tabs.SettingsList = {
             {
                 db = "ScoreNTeleport_DunShortName_FontSize",
                 name = "Dungeon Shortname Font Size",
-                type = "Slider", 
+                type = "SliderV2", 
                 indent = 1,
                 value = {
                     default = 13,
@@ -264,7 +264,7 @@ settings_Tabs.SettingsList = {
             {
                 db = "ScoreNTeleport_DunShortName_PerLine",
                 name = "The number of characters per line of the Dungeon Shortname",
-                type = "Slider", 
+                type = "SliderV2", 
                 indent = 1,
                 value = {
                     default = 7,
@@ -276,7 +276,7 @@ settings_Tabs.SettingsList = {
             {
                 db = "ScoreNTeleport_DunLevel_FontSize",
                 name = "Dungeon Highest Level Font Size",
-                type = "Slider", 
+                type = "SliderV2", 
                 indent = 1,
                 value = {
                     default = 22,
@@ -288,7 +288,7 @@ settings_Tabs.SettingsList = {
             {
                 db = "ScoreNTeleport_DunScore_FontSize",
                 name = "Dungeon Highest Score Font Size",
-                type = "Slider", 
+                type = "SliderV2", 
                 indent = 1,
                 value = {
                     default = 22,
@@ -312,9 +312,18 @@ settings_Tabs.SettingsList = {
                 }
             },
             {
+                db = "PartyInfo_ItemLevel",
+                name = "Show Item Level",
+                type = "CheckBox", 
+                indent = 1,
+                value = {
+                    default = true,
+                }
+            },
+            {
                 db = "PartyKeyStone_ScoreColorStyle",
                 name = "Score Text Color Style",
-                type = "ComboBox", 
+                type = "ComboBoxV2", 
                 indent = 1,
                 value = {
                     default = "raiderio",
@@ -324,7 +333,7 @@ settings_Tabs.SettingsList = {
             {
                 db = "PartyInfo_Width",
                 name = "PartyInfo Width",
-                type = "Slider", 
+                type = "SliderV2", 
                 indent = 1,
                 value = {
                     default = 265,
@@ -336,7 +345,7 @@ settings_Tabs.SettingsList = {
             {
                 db = "PartyKeyStone_xOffset",
                 name = "X Offset",
-                type = "Slider", 
+                type = "SliderV2", 
                 indent = 1,
                 value = {
                     default = 0.0,
@@ -348,7 +357,7 @@ settings_Tabs.SettingsList = {
             {
                 db = "PartyKeyStone_yOffset",
                 name = "Y Offset",
-                type = "Slider", 
+                type = "SliderV2", 
                 indent = 1,
                 value = {
                     default = 0.0,
@@ -383,12 +392,13 @@ settings_Tabs.SettingsList = {
             {
                 db = "WeeklyReport_FrameStyle",
                 name = "Weekly Report Style",
-                type = "ComboBox", 
+                type = "ComboBoxV2", 
                 indent = 1,
                 value = {
                     default = "accordion",
                     --list = {["accordion"] = "Accordion Style", ["standard"] = "Standard Style"}
                     list = {["standard"] = "Standard Style"}
+                    ,multiSelect = false
                 }
             },
             {
@@ -412,7 +422,7 @@ settings_Tabs.SettingsList = {
             {
                 db = "WeeklyReport_FontSize",
                 name = "Weekly Report Font Size",
-                type = "Slider", 
+                type = "SliderV2", 
                 indent = 1,
                 value = {
                     default = 15,
@@ -424,7 +434,7 @@ settings_Tabs.SettingsList = {
             {
                 db = "WeeklyReport_FrameWidth",
                 name = "Weekly Report Frame Width",
-                type = "Slider", 
+                type = "SliderV2", 
                 indent = 1,
                 value = {
                     default = 400,
@@ -436,7 +446,7 @@ settings_Tabs.SettingsList = {
             {
                 db = "WeeklyReport_FrameHeightCorrection",
                 name = "Weekly Report Frame Height Correction(Fix misalignment and height discrepancies caused by UI scaling.)",
-                type = "Slider", 
+                type = "SliderV2", 
                 indent = 1,
                 value = {
                     default = 0,
@@ -603,6 +613,43 @@ local function BuildSlider(parent, item, itemName, leftmargin, tabHeight)
     return tabHeight + _title:GetHeight() + 20
 end
 
+-- 构建"滑块"设置项 V2（使用现代 MinimalSliderWithSteppersTemplate，自带 +/- 步进按钮）
+local function BuildSliderV2(parent, item, itemName, leftmargin, tabHeight)
+    local _title = CreateItemTitle(parent, itemName, leftmargin, -tabHeight - 5, SETTINGS_COLUMN_WIDTH - leftmargin)
+    local _slider = CreateFrame("Slider", "MPPE_Setting_"..item.db.."_V2", parent, "MinimalSliderWithSteppersTemplate")
+    _slider:SetSize(220, 40)
+    _slider:SetPoint("LEFT", _title, "RIGHT", 0, 0)
+
+    -- 模板为容器形态（Frame + 子 Slider）时取子 Slider 作为真正的滑条，否则直接用自身
+    local _real = _slider.Slider or _slider
+    _real:SetMinMaxValues(item.value.min or 0, item.value.max or 100)
+    if type(item.value.step) ~= "number" or item.value.step <= 0 then item.value.step = 1 end
+    _real:SetValueStep(item.value.step)
+    _real:SetObeyStepOnDrag(true)
+
+    local _str = tostring(mppe.MathRound(item.value.step, 3))
+    local _dec = _str:match("%.(%d+)")
+    local _decimalPlace = _dec and math.min(#_dec, 3) or 0
+
+    -- 显示最小/最大值标签（模板 MinText/MaxText 默认隐藏，需 Show）
+    if _slider.MinText then _slider.MinText:SetText(item.value.min or 0) _slider.MinText:Show() end
+    if _slider.MaxText then _slider.MaxText:SetText(item.value.max or 100) _slider.MaxText:Show() end
+
+    -- 当前数值显示在滑条上方（模板 TopText 默认隐藏，与 BuildSlider 的 Text 一致显示在顶部）
+    local _valueLabel = _slider.TopText
+    _real:SetValue(GetDBValue(item, "number", 50))
+    if _valueLabel then
+        _valueLabel:SetText(mppe.MathRound(_real:GetValue(), _decimalPlace))
+        _valueLabel:Show()
+    end
+    _real:SetScript("OnValueChanged", function(self, value)
+        if _valueLabel then _valueLabel:SetText(mppe.MathRound(value, _decimalPlace)) end
+        MythicPlusPageExtensionDB[item.db] = mppe.MathRound(value, _decimalPlace)
+        if item.onChange then item.onChange(mppe.MathRound(value, _decimalPlace)) end
+    end)
+    return tabHeight + _title:GetHeight() + 20
+end
+
 -- 构建"下拉框"设置项
 local function BuildComboBox(parent, item, itemName, leftmargin, tabHeight)
     local _title = CreateItemTitle(parent, itemName, leftmargin, -tabHeight, SETTINGS_COLUMN_WIDTH - leftmargin)
@@ -642,6 +689,83 @@ local function BuildComboBox(parent, item, itemName, leftmargin, tabHeight)
     return tabHeight + _title:GetHeight() + 10
 end
 
+-- 构建"下拉框"设置项 V3（完全自实现，不依赖 Settings 全局方法；仅用 Menu 框架通用 API 还原原生设置下拉观感）
+local function BuildComboBoxV2(parent, item, itemName, leftmargin, tabHeight)
+    local _title = CreateItemTitle(parent, itemName, leftmargin, -tabHeight, SETTINGS_COLUMN_WIDTH - leftmargin)
+    -- 原生设置下拉使用 WowStyle2DropdownTemplate（common-dropdown-c-button 深色按钮，悬停显示箭头）
+    local _comboBox = CreateFrame("DropdownButton", "MPPE_Setting_"..item.db.."_V3", parent, "WowStyle2DropdownTemplate")
+    _comboBox:SetSize(205, 24)
+    _comboBox:SetPoint("LEFT", _title, "RIGHT", 5, 0)
+
+    local _isMulti = item.value.multiSelect == true
+    local _list = item.value.list or {}
+
+    -- 自实现的选项数据容器（等价于 Settings.CreateControlTextContainer）
+    -- 每条：{ value, label, text, controlType = "Radio"/"Checkbox" }
+    local _optionsData = {}
+    local _keys = {}
+    for _k in pairs(_list) do _keys[#_keys + 1] = _k end
+    table.sort(_keys)
+    for _index, _key in ipairs(_keys) do
+        local _label = Translate[_list[_key]] or _list[_key]
+        _optionsData[#_optionsData + 1] = {
+            value = _isMulti and _index or _key, -- 多选用稳定索引（位掩码），单选用原始 key
+            label = _label,
+            text = _label,
+            controlType = _isMulti and "Checkbox" or "Radio",
+        }
+    end
+
+    -- 自实现菜单生成器（等价于 Settings.CreateDropdownOptionInserter，直接调用 Menu 框架 API）
+    _comboBox:SetupMenu(function(dropdown, rootDescription)
+        rootDescription:SetGridMode(MenuConstants.VerticalGridDirection)
+        for _, _option in ipairs(_optionsData) do
+            if _option.controlType == "Radio" then
+                -- 单选：原生设置用 CreateHighlightRadio（高亮菜单项，匹配 WowStyle2 观感）
+                local function isSelected(_data)
+                    return MythicPlusPageExtensionDB[item.db] == _data.value
+                end
+                local function setSelected(_data)
+                    MythicPlusPageExtensionDB[item.db] = _data.value
+                    if item.onChange then item.onChange(_data.value) end
+                end
+                local _desc = rootDescription:CreateHighlightRadio(_option.label, isSelected, setSelected, _option, _option.onEnter)
+                MenuUtil.SetElementText(_desc, _option.text)
+            else
+                -- 多选：DB 存位掩码，bit.lshift(1, value-1) 对应一个选项
+                local _bit = bit.lshift(1, _option.value - 1)
+                local function isChecked()
+                    local _mask = MythicPlusPageExtensionDB[item.db]
+                    return type(_mask) == "number" and bit.band(_mask, _bit) ~= 0
+                end
+                local function setChecked()
+                    local _mask = type(MythicPlusPageExtensionDB[item.db]) == "number" and MythicPlusPageExtensionDB[item.db] or 0
+                    local _newMask = isChecked() and bit.band(_mask, bit.bnot(_bit)) or bit.bor(_mask, _bit)
+                    MythicPlusPageExtensionDB[item.db] = _newMask
+                    if item.onChange then item.onChange(_newMask) end
+                end
+                local _desc = rootDescription:CreateCheckbox(_option.label, isChecked, setChecked, _option)
+                MenuUtil.SetElementText(_desc, _option.text)
+            end
+        end
+    end)
+
+    -- 应用最终选中键（复用旧逻辑：DB 值 -> 默认值 -> 列表第一项）
+    local _finalKey = ResolveComboKey(item)
+    if _isMulti then
+        -- 多选：DB 必须是数字位掩码，无选中时显示 "None"
+        if type(MythicPlusPageExtensionDB[item.db]) ~= "number" then MythicPlusPageExtensionDB[item.db] = 0 end
+        _comboBox:SetDefaultText("None")
+    elseif _finalKey then
+        _comboBox:SetDefaultText(Translate[_list[_finalKey]] or _list[_finalKey])
+        MythicPlusPageExtensionDB[item.db] = _finalKey
+    else
+        _comboBox:SetDefaultText("- WRONG -")
+    end
+
+    return tabHeight + _title:GetHeight() + 10
+end
+
 -- 构建"文本输入"设置项
 local function BuildTextBox(parent, item, itemName, leftmargin, tabHeight)
     local _title = CreateItemTitle(parent, itemName, leftmargin, -tabHeight, SETTINGS_COLUMN_WIDTH - leftmargin)
@@ -656,6 +780,10 @@ local function BuildTextBox(parent, item, itemName, leftmargin, tabHeight)
     _textBox:SetScript("OnTextChanged", function(self)
         MythicPlusPageExtensionDB[item.db] = self:GetText()
     end)
+    -- 回车后取消编辑焦点（DB 已在 OnTextChanged 中实时保存，无需在此重复提交）
+    _textBox:SetScript("OnEnterPressed", function(self)
+        self:ClearFocus()
+    end)
     return tabHeight + _title:GetHeight() + 20
 end
 
@@ -664,7 +792,10 @@ local widgetBuilders = {
     Label = BuildLabel,
     CheckBox = BuildCheckBox,
     Slider = BuildSlider,
-    ComboBox = BuildComboBox,
+    SliderV2 = BuildSliderV2,
+    ComboBoxV2 = BuildComboBox,
+    ComboBoxV2 = BuildComboBoxV2,
+    ComboBoxV3 = BuildComboBoxV3,
     TextBox = BuildTextBox,
 }
 
