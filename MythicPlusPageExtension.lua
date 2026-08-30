@@ -47,6 +47,7 @@ MythicPlusPageExtension:SetScript("OnEvent", function(self, event, addonName)
             WeeklyReport_ShowScrollBar = true,
             ToastQuickHide_Enable = false,
             GuildAndPartyKS_Enable = true,
+            GuildAndPartyKS_ShowParty = false,
             GuildAndPartyKS_SlashKey = false
         }
         -- 2. (可选但推荐) 确保每个设置项都有默认值
