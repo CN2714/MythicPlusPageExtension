@@ -501,6 +501,15 @@ settings_Tabs.SettingsList = {
                 }
             },
             {
+                db = "GuildAndPartyKS_ShortDunName",
+                name = "↑ Short dungeon names",
+                type = "CheckBox", 
+                indent = 1,
+                value = {
+                    default = false,
+                }
+            },
+            {
                 db = "GuildAndPartyKS_PMContent",
                 name = "↑ PM Content(keystone = %s)",
                 type = "TextBox", 

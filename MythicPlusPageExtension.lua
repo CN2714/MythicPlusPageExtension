@@ -48,7 +48,8 @@ MythicPlusPageExtension:SetScript("OnEvent", function(self, event, addonName)
             ToastQuickHide_Enable = false,
             GuildAndPartyKS_Enable = true,
             GuildAndPartyKS_ShowParty = false,
-            GuildAndPartyKS_SlashKey = false
+            GuildAndPartyKS_SlashKey = false,
+            GuildAndPartyKS_ShortDunName = false
         }
         -- 2. (可选但推荐) 确保每个设置项都有默认值
         for key, defaultValue in pairs(defaultSettings) do

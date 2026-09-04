@@ -18,7 +18,7 @@ local _firstRefreshFired = false
 -- 列表头高度（固定在滚动区域上方显示列标题；需在 createKeysFrame 之前声明以落入其词法作用域）
 local HEADER_HEIGHT = 20
 -- 相邻列间距（需在 createKeysFrame 之前声明，列头锚定需要引用）
-local COL_GAP = 5
+local COL_GAP = 3
 
 -- 性能排查调试开关（定位完卡顿后置 false 关闭 print）
 local _gksDebug = false
@@ -200,9 +200,9 @@ local function createKeysFrame()
     local _headerBg = _header:CreateTexture(nil, "BACKGROUND")
     _headerBg:SetAllPoints()
     _headerBg:SetColorTexture(0.3, 0.3, 0.3, 1)
-    -- 名称列标题（左偏移/宽度与行内 name 列一致，由 updateLayout 同步）
+    -- 名称列标题（左偏移/宽度与行内 name 列一致，由 updateLayout 同步；起点 0 相对原 8 整体左移 8px）
     _header.nameFS = _header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    _header.nameFS:SetPoint("LEFT", _header, "LEFT", 8, 0)
+    _header.nameFS:SetPoint("LEFT", _header, "LEFT", 0, 0)
     _header.nameFS:SetJustifyH("CENTER")
     _header.nameFS:SetText(string.format("|c00ffff63%s|r",Translate["Name"]))
     -- 分数列标题（名称列右侧 +5，固定宽度，与行内 score 列一致）
@@ -337,7 +337,7 @@ local _sectionExpanded = { party = true, guild = true }
 -- 列宽布局：名称列与钥石列各占剩余宽度 50%，分数列为固定宽度（可分配宽度 = 内容宽 - 分数列宽 - 间距 - 边距）
 -- COL_GAP 在文件顶部声明（createKeysFrame 列头需要引用）
 local CONTENT_MARGIN = 12   -- 内容左右边距合计
-local SCORE_WIDTH = 80      -- 分数列固定宽度（不随窗口缩放，先定 80 看效果）
+local SCORE_WIDTH = 45      -- 分数列固定宽度
 
 -- 构造钥石链接的函数（Hkeystone 格式：itemID:mapID:level:affix1..affix5，悬停可显示钥石信息）
 local function buildKeystoneLink(mapID, level)
@@ -349,10 +349,19 @@ local function buildKeystoneLink(mapID, level)
     )
 end
 
--- 构造钥石显示文本（纯文本模式，非超链接；供列表直接显示）
-local function buildKeystoneText(mapID, level)
-    local _dungeonName = C_ChallengeMode.GetMapUIInfo(mapID) or "Unknown"
+-- 构造钥石显示文本（纯文本模式，非超链接；供列表直接显示；shortName 为 true 且命中 mppe.Dungeons 时用本地化短名，未命中/缺翻译回退原名避免空显示）
+local function buildKeystoneText(mapID, level, shortName)
+    local _dungeonName = shortName and mppe.Dungeons[mapID] and mppe.Translate[mppe.Dungeons[mapID].Name]
+    if not _dungeonName then
+        _dungeonName = C_ChallengeMode.GetMapUIInfo(mapID) or "Unknown"
+    end
     return string.format("|cffa335ee%d %s|r", level, _dungeonName)
+end
+
+-- 构造钥石聊天纯文本（不含任何颜色/链接管道转义码，供私信发送；聊天发送时消息中的 "|" 会被当作转义码解析，含非法转义即报 Invalid escape code）
+local function buildKeystoneChatText(mapID, level)
+    local _dungeonName = C_ChallengeMode.GetMapUIInfo(mapID) or "Unknown"
+    return string.format("%d %s", level, _dungeonName)
 end
 
 -- 拆分玩家名（可能是纯名或 Name-Realm）为：纯名（列表显示用）+ 私信目标名（跨服需带服务器名才能私信成功，同服用纯名）
@@ -493,7 +502,9 @@ local function renderRow(row, entry)
         -- 分数列：染色模式与 tooltip 一致（raiderio hex 染色），无分数显示 0
         local _rating = entry.data.rating or 0
         row.score:SetText(string.format("|c%s%d|r", mppe.GetColorByScore(_rating, "raiderio", true), _rating))
-        row.keystone:SetText(buildKeystoneText(entry.data.mapID, entry.data.level))
+        -- 钥石列文本：GuildAndPartyKS_ShortDunName 开启时用短副本名（tooltip 内始终用原名，见行 tooltip）
+        local _shortDun = MythicPlusPageExtensionDB and MythicPlusPageExtensionDB.GuildAndPartyKS_ShortDunName
+        row.keystone:SetText(buildKeystoneText(entry.data.mapID, entry.data.level, _shortDun))
         row.zone:SetText(entry.data.zone or "")
         row.keystone.data = entry.data -- 挂载数据供悬停 tooltip 使用
     end
@@ -509,7 +520,7 @@ local function createRowUI(parent)
 
     -- 玩家名（按钮：点击将私信内容填入聊天框，玩家确认后发送）
     _row.name = CreateFrame("Button", nil, _row)
-    _row.name:SetPoint("LEFT", _row, "LEFT", 8, 0)
+    _row.name:SetPoint("LEFT", _row, "LEFT", 1, 0)
     _row.name:SetWidth(180)
     _row.name:SetHeight(ROW_HEIGHT)
     _row.name:SetNormalFontObject("GameFontHighlightSmall")
@@ -526,12 +537,13 @@ local function createRowUI(parent)
     local function _nameClick(self)
         local _entry = self:GetParent().data
         if _entry and _entry.type == "member" and _entry.data then
-            local _link = buildKeystoneLink(_entry.data.mapID, _entry.data.level)
+            -- 用无转义码纯文本钥石描述（原名副本）：颜色码/超链接中的 "|" 在聊天发送时会被判为非法转义码（Invalid escape code）
+            local _keystoneText = buildKeystoneChatText(_entry.data.mapID, _entry.data.level)
             -- 私信模板：设置里已存内容（含空串）时优先使用，仅未设置（nil）才回退默认模板
             local _pmContent = MythicPlusPageExtensionDB and MythicPlusPageExtensionDB.GuildAndPartyKS_PMContent
             local _template = (type(_pmContent) == "string") and _pmContent or Translate["Can I run your %s?"]
-            -- 含 %s 占位符则替换为钥石链接，不含则原样使用（gsub 函数形式避免链接特殊字符被转义）
-            local _text = _template:gsub("%%s", function() return _link end)
+            -- 含 %s 占位符则替换为钥石纯文本，不含则原样使用（gsub 函数形式避免特殊字符被转义）
+            local _text = _template:gsub("%%s", function() return _keystoneText end)
             -- 新调整：填入聊天输入框（whisper），玩家确认后按回车再发送
             ChatFrame_OpenChat(string.format("/w %s %s", _entry.data.name, _text), nil)
         end
@@ -556,13 +568,13 @@ local function createRowUI(parent)
     _row.keystone:SetWordWrap(true)
     -- 纯文本模式：无超链接/无独立 tooltip，鼠标穿透到行，整行统一 tooltip
 
-    -- 当前位置（区域名）
+    -- 当前位置（区域名）：左锚定钥石列右侧 +1，右锚定到行右缘 -1（双锚定后自动占满行剩余空间）
     _row.zone = _row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     _row.zone:SetFont(_font, _size, "OUTLINE") -- 黑色描边
     _row.zone:SetPoint("LEFT", _row.keystone, "RIGHT", COL_GAP, 0)
-    _row.zone:SetWidth(90)
+    _row.zone:SetPoint("RIGHT", _row, "RIGHT", 0, 0)
     _row.zone:SetJustifyH("LEFT")
-    _row.zone:SetWordWrap(true)
+    _row.zone:SetWordWrap(false)
     _row.zone:SetText("")
 
     -- 行高亮：鼠标进入整行显示半透明背景（含名字/分数/钥石/位置区域）
@@ -578,8 +590,8 @@ local function createRowUI(parent)
         local _d = _entry.data
         local _classColor = _d.classFile and RAID_CLASS_COLORS[_d.classFile]
         local _nameColor = _classColor and _classColor:GenerateHexColor() or "FFCCCCCC"
-        -- 锚点跟随鼠标（ANCHOR_CURSOR 自动显示在光标上方）
-        GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT")
+        -- 锚点改为行右上角（_row.bg 与 _row 同尺寸，其右上角即行右上角；ANCHOR_TOPRIGHT 使 tooltip 固定在行右上外侧，不再跟随鼠标跳动）
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(string.format("|c%s%s|r", _nameColor, _d.name))
         GameTooltip:AddLine(string.format("%s: |c%s%s|r", Translate["Score"], mppe.GetColorByScore(_d.rating,"raiderio",true), _d.rating or "-"))
         local _dungeonName = C_ChallengeMode.GetMapUIInfo(_d.mapID) or Translate["UNKNOWN"]
@@ -646,8 +658,10 @@ updateLayout = function()
 
     -- 名称/钥石/当前位置三列分配剩余宽度（可分配宽度 = 内容宽 - 分数列固定宽 - 3 个间距 - 边距）
     local _availWidth = math.max(_contentWidth - SCORE_WIDTH - COL_GAP * 3 - CONTENT_MARGIN, 0)
-    local _nameWidth = _availWidth * 0.3
-    local _keystoneWidth = _availWidth * 0.4
+    -- 钥石列占比：GuildAndPartyKS_ShortDunName 开启（显示短名）时减半（0.4→0.3），让出的宽度由右锚定 zone 列自动吸收
+    local _shortDun = MythicPlusPageExtensionDB and MythicPlusPageExtensionDB.GuildAndPartyKS_ShortDunName
+    local _nameWidth = _availWidth * (_shortDun and 0.35 or 0.3)
+    local _keystoneWidth = _availWidth * (_shortDun and 0.35 or 0.4)
     local _zoneWidth = _availWidth * 0.3
 
     -- 同步列表头列宽（与行内名称/分数/钥石/位置列完全对齐；分数列为固定宽度）
@@ -666,7 +680,7 @@ updateLayout = function()
         if _row.name then _row.name:SetWidth(_nameWidth) end
         if _row.score then _row.score:SetWidth(SCORE_WIDTH) end
         if _row.keystone then _row.keystone:SetWidth(_keystoneWidth) end
-        if _row.zone then _row.zone:SetWidth(_zoneWidth) end
+        -- zone 列不设固定宽度：createRowUI 已左/右双锚定，随行宽自动占满剩余空间（右留 1px）
         -- 行高 = 名称/钥石/位置换行后的最大实际高度（GetStringHeight 不依赖布局，窗口刚打开/刷新即可正确计算换行；至少 ROW_HEIGHT）
         local _rowH = ROW_HEIGHT
         if _row.data and _row.data.type == "member" then
