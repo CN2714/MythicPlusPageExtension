@@ -1,6 +1,6 @@
 ## Interface: 120007, 120100
 ## Title: MythicPlusPageExtension
-## Version: 12.1.B1
+## Version: 12.1.B2
 ## Author: CN2714
 ## IconTexture: Interface\AddOns\MythicPlusPageExtension\icon.tga
 ## Notes: Mythic Plus Page Extension: This addon enhances the Mythic+ interface by displaying your best score and highest completed level for each dungeon. It features one-click dungeon teleport usage with raid announcements, automatic Keystone information sharing within your party, and provides a weekly Mythic+ summary report.
@@ -21,6 +21,10 @@ Locales\zhTW.lua
 
 Settings.lua
 Database.lua
+
+GuildKeystoneCore.lua
+GuildKeystoneFilterBar.lua
+GuildMemberKeystone.lua
 
 PartyModel.lua
 PartySyncService.lua

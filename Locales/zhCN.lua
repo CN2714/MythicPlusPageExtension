@@ -99,6 +99,10 @@ Translate['Zone'] = '当前位置'
 Translate['Click name to create PM (manual send).'] = '点击名字创建私聊(手动发送)'
 Translate['Can I run your %s?'] = '能一起打你的%s吗?'
 Translate['Refresh'] = '刷新'
+Translate['Class'] = '职业'
+Translate['Dun'] = '副本'
+Translate['On Guild Member List, Show Guild Member\'s Keystone Info'] = '在公会成员列表中显示公会成员的钥石信息'
+Translate['↑Experiments: This feature is still in testing, and it is known that repeatedly opening and closing the guild member list will greatly increase this addon\'s memory usage. This is not a memory leak: it is because this feature "pollutes" the guild list, causing the game to attribute the guild UI\'s memory usage to this addon.'] = '↑实验性功能：该功能处于测试阶段，且已知反复开关公会列表界面会发现本插件内存占用大幅增长，这不是内存泄漏，是因为该功能“污染”了公会列表导致系统将公会界面的内存占用记在本插件上。'
 
 --Translate['Shift + Right-Click:Display Demo'] = 'Shift+右键点击：生成演示数据'
 -- Dungeons Shortname 中文缩写最好≤5字，不然需要调副本简称字体大小

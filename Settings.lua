@@ -518,6 +518,24 @@ settings_Tabs.SettingsList = {
                     default = Translate["Can I run your %s?"],
                 }
             },
+            {
+                db = "GuildMemberKeystone_Show",
+                name = "On Guild Member List, Show Guild Member\'s Keystone Info",
+                type = "CheckBox", 
+                indent = 0,
+                value = {
+                    default = false,
+                },
+                onChange = function(enabled)
+                    if mppe.GuildMemberKeystone_SetEnabled then mppe.GuildMemberKeystone_SetEnabled(enabled) end
+                end
+            },
+            {
+                name = "↑Experiments: This feature is still in testing, and it is known that repeatedly opening and closing the guild member list will greatly increase this addon's memory usage. This is not a memory leak: it is because this feature \"pollutes\" the guild list, causing the game to attribute the guild UI's memory usage to this addon.",
+                type = "Label", 
+                indent = 0,
+                lines = 4
+            },
         }
     }
 }

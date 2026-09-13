@@ -46,6 +46,7 @@ mppe.Debug.inspectTarget = nil    -- 观察目标 { unit, guid, name, index }
 
 -- 控件引用（懒初始化后填充）
 local DebugFrame, DbPanel, InspPanel, AssetPanel, TabDB, TabInsp, TabAsset
+local MemPanel, TabMem, MemStatusText, MemToggleBtn, MemScrollFrame, MemScrollChild   -- 内存记录页
 local DbScrollFrame, DbScrollChild, InspScrollFrame, InspScrollChild, InspStatusText
 local MemberDropdown
 local AssetFilterInput                          -- 素材筛选输入框
@@ -59,6 +60,7 @@ local AssetCellSize = 72                        -- 单元格尺寸
 local AssetCellPitch = 78                       -- 单元格间距（含边距）
 local AssetFilter = ""                          -- 当前筛选关键字（小写）
 local getAssetCell, renderAssetGrid, applyAssetFilter -- 前向声明（showPanel/getAssetCell 相互引用）
+local renderMemPanel           -- 前向声明（showPanel 切到内存页时需要渲染）
 local FrameInitialized = false
 local Inspecting = false
 local InspectTimeout = nil
@@ -454,6 +456,188 @@ local function handleInspectReady(guid)
 end
 
 -- =================================================================
+-- 内存记录页：实时记录“本插件总量”（不区分模块）
+--   数据来源：Blizzard 的归属记账（C_AddOns.GetAddOnMemoryUsage / GetAddOnMemoryUsage），单位 KB；
+--             读取前调 UpdateAddOnMemoryUsage() 刷新记账（它只重算归属，不做 GC）。
+--   注意：记账规则是“对象在哪段代码里创建就算谁的”，所以我们调用 Blizzard 函数期间
+--         Blizzard 内部建的临时对象也计入 → 读数是上界，不是精确值。
+--   对比项：环境堆 = collectgarbage("count")（整个 Lua VM：所有插件 + Blizzard UI）。
+--   开关按钮控制是否每 1 秒采一次样；采样结果只写到本页列表（不 print）。
+-- =================================================================
+local MEM_SAMPLE_INTERVAL = 1      -- 采样间隔（秒）
+local MEM_MAX_RECORDS = 300        -- 最多保留多少条记录（防止列表无限增长）
+local MEM_ROW_HEIGHT = 15          -- 每行高度
+
+local MemRecords = {}              -- { { time, kb, envKB, deltaKB }, ... }，新记录在最前
+local MemRowPool = {}              -- 记录行 FontString 复用池
+local MemRecording = false         -- 是否正在记录
+local MemTicker = nil              -- 采样计时器
+local MemOwnIndex = nil            -- 本插件在插件列表中的序号（读取记账的入参）
+local MemPeakKB = 0                -- 本轮观察的峰值
+local MemLastKB = nil              -- 上次采样值
+local MemPrevKB = nil              -- 上上次采样值（用于状态行的“变化”）
+local MemLastEnvKB = nil           -- 上次采样的环境堆大小
+local MemSampleCount = 0           -- 本轮采样次数
+local MemUserScrolled = false      -- 用户是否手动滚离了顶部（滚回顶部会自动恢复钉住）
+
+-- 把视图钉在顶部：最新一条永远在第一行
+-- 必须每轮主动重设：记录每秒变长，滚动条会随着内容一起“跑”，否则得不停手动拉回来；
+-- 但用户自己滚下去翻旧记录时就不抢他的滚动条。
+-- 注意：不能 hook 滚动条的 OnValueChanged —— ScrollFrameTemplate 的滚动条不是 Slider，
+--       不支持该脚本类型（Frame:HookScript 会直接报错），所以改为读当前滚动位置来判断。
+local function pinMemViewToTop()
+    if not MemScrollFrame then return end
+
+    local _offset = MemScrollFrame:GetVerticalScroll() or 0
+    if _offset > MEM_ROW_HEIGHT * 0.5 then
+        MemUserScrolled = true      -- 用户滚走了：这次不动他的位置
+        return
+    end
+
+    MemUserScrolled = false         -- 已在顶部（或滚回来了）：继续钉住
+    MemScrollFrame:SetVerticalScroll(0)
+end
+
+-- 强制回到顶部（进页 / 清空时用，忽略“用户滚离”状态）
+function mppe.Debug.MemViewTop(resetUserScroll)
+    if resetUserScroll then MemUserScrolled = false end
+    if not MemScrollFrame then return end
+    MemScrollFrame:SetVerticalScroll(0)
+end
+
+-- 找本插件的插件序号（加载后稳定，找到即缓存）
+-- 老接口在部分客户端版本已移除：用 rawget 动态取值，拿不到就返回 nil（读数显示“不可用”）
+local function findOwnAddonIndex()
+    local _getNum = (C_AddOns and C_AddOns.GetNumAddOns) or rawget(_G, "GetNumAddOns")
+    local _getName = (C_AddOns and C_AddOns.GetAddOnInfo) or rawget(_G, "GetAddOnInfo")
+    if not (_getNum and _getName) then return nil end
+
+    for _index = 1, _getNum() do
+        if _getName(_index) == ADDON_NAME then return _index end
+    end
+
+    return nil
+end
+
+-- 取本插件当前内存（KB）；接口不可用时返回 nil
+local function memAddonKB()
+    if MemOwnIndex == nil then MemOwnIndex = findOwnAddonIndex() end
+    if not MemOwnIndex then return nil end
+
+    if UpdateAddOnMemoryUsage then UpdateAddOnMemoryUsage() end   -- 刷新归属记账（不做 GC）
+
+    local _get = (C_AddOns and C_AddOns.GetAddOnMemoryUsage) or GetAddOnMemoryUsage
+    if not _get then return nil end
+
+    local _kb = _get(MemOwnIndex)
+    if type(_kb) == "number" and _kb >= 0 then return _kb end
+    return nil
+end
+
+-- 刷新页面顶部的状态行（当前值 / 环境堆 / 变化 / 峰值 / 采样次数）
+local function updateMemStatus()
+    if not MemStatusText then return end
+
+    local _ownText = MemLastKB and string.format("本插件 %.2f MB", MemLastKB / 1024) or "本插件 读数不可用"
+    local _deltaText = "—"
+    if MemLastKB and MemPrevKB then _deltaText = string.format("%+.2f MB", (MemLastKB - MemPrevKB) / 1024) end
+
+    MemStatusText:SetText(string.format("%s | 环境堆 %.1f MB | 变化 %s | 峰值 %.2f MB | 采样 %d 次%s",
+        _ownText, (MemLastEnvKB or collectgarbage("count")) / 1024, _deltaText, MemPeakKB / 1024, MemSampleCount,
+        MemRecording and "" or "（未记录）"))
+end
+
+-- 渲染记录列表（面板不可见时不渲染，但记录仍在继续）
+renderMemPanel = function()
+    if not (MemScrollChild and MemPanel and MemPanel:IsShown()) then return end
+
+    local _count = #MemRecords
+    local _width = math.max(120, (MemScrollFrame:GetWidth() or DebugScrollWidth) - 12)
+
+    for _index = 1, _count do
+        local _row = MemRowPool[_index]
+        if not _row then
+            _row = MemScrollChild:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            _row:SetJustifyH("LEFT")
+            MemRowPool[_index] = _row
+        end
+
+        local _rec = MemRecords[_index]
+        local _deltaText = _rec.deltaKB and string.format(" (%+.2f MB)", _rec.deltaKB / 1024) or ""
+
+        _row:ClearAllPoints()
+        _row:SetPoint("TOPLEFT", MemScrollChild, "TOPLEFT", 4, -(_index - 1) * MEM_ROW_HEIGHT)
+        _row:SetWidth(_width)
+        _row:SetText(string.format("[%s] 本插件 %.2f MB%s   环境堆 %.1f MB",
+            _rec.time, (_rec.kb or 0) / 1024, _deltaText, (_rec.envKB or 0) / 1024))
+        _row:Show()
+    end
+
+    -- 隐藏多余的池化行
+    for _index = _count + 1, #MemRowPool do MemRowPool[_index]:Hide() end
+
+    MemScrollChild:SetHeight(math.max(1, _count * MEM_ROW_HEIGHT + 6))
+    MemScrollFrame:UpdateScrollChildRect()
+end
+
+-- 采一次样：写入记录列表（新记录在最前）并刷新状态行
+function mppe.Debug.MemSample()
+    local _kb = memAddonKB()
+    local _envKB = collectgarbage("count")
+
+    local _deltaKB
+    if _kb and MemLastKB then _deltaKB = _kb - MemLastKB end
+
+    MemPrevKB = MemLastKB
+    if _kb then
+        MemLastKB = _kb
+        MemPeakKB = math.max(MemPeakKB, _kb)
+    end
+    MemLastEnvKB = _envKB
+    MemSampleCount = MemSampleCount + 1
+
+    table.insert(MemRecords, 1, { time = date("%H:%M:%S"), kb = _kb, envKB = _envKB, deltaKB = _deltaKB })
+    while #MemRecords > MEM_MAX_RECORDS do table.remove(MemRecords) end
+
+    updateMemStatus()
+    renderMemPanel()
+
+    -- 钉住顶部：最新一条就在第一行（用户自己翻旧记录时不动他的滚动条）
+    pinMemViewToTop()
+end
+
+-- 开始 / 停止记录（页面上的开关按钮调用）
+function mppe.Debug.MemRecord(enable)
+    enable = enable == true
+
+    if MemTicker then
+        MemTicker:Cancel()
+        MemTicker = nil
+    end
+
+    MemRecording = enable
+    if MemToggleBtn then MemToggleBtn:SetText(enable and "停止记录" or "开始记录") end
+
+    if enable then
+        -- 重新开始一轮观察（已采到的历史记录保留，需要）
+        MemSampleCount, MemPeakKB, MemLastKB, MemPrevKB = 0, 0, nil, nil
+        mppe.Debug.MemSample()   -- 点下去立即出第一条
+        MemTicker = C_Timer.NewTicker(MEM_SAMPLE_INTERVAL, function() mppe.Debug.MemSample() end)
+    end
+
+    updateMemStatus()
+end
+
+-- 清空记录
+function mppe.Debug.MemClear()
+    wipe(MemRecords)
+    MemSampleCount, MemPeakKB, MemLastKB, MemPrevKB, MemLastEnvKB = 0, 0, nil, nil, nil
+    updateMemStatus()
+    renderMemPanel()
+    mppe.Debug.MemViewTop(true)
+end
+
+-- =================================================================
 -- 窗体创建（懒初始化，首次打开时执行）
 -- =================================================================
 
@@ -494,19 +678,30 @@ local function showPanel(which)
         DbPanel:Show()
         InspPanel:Hide()
         AssetPanel:Hide()
-        setActiveTab(TabDB, TabInsp, TabAsset)
+        MemPanel:Hide()
+        setActiveTab(TabDB, TabInsp, TabAsset, TabMem)
         refreshDbTree()
     elseif which == "insp" then
         DbPanel:Hide()
         InspPanel:Show()
         AssetPanel:Hide()
-        setActiveTab(TabInsp, TabDB, TabAsset)
-    else
+        MemPanel:Hide()
+        setActiveTab(TabInsp, TabDB, TabAsset, TabMem)
+    elseif which == "asset" then
         DbPanel:Hide()
         InspPanel:Hide()
         AssetPanel:Show()
-        setActiveTab(TabAsset, TabDB, TabInsp)
+        MemPanel:Hide()
+        setActiveTab(TabAsset, TabDB, TabInsp, TabMem)
         renderAssetGrid()
+    else
+        -- 内存记录页
+        DbPanel:Hide()
+        InspPanel:Hide()
+        AssetPanel:Hide()
+        MemPanel:Show()
+        setActiveTab(TabMem, TabDB, TabInsp, TabAsset)
+        renderMemPanel()
     end
 end
 
@@ -670,9 +865,14 @@ local function initDebugFrame()
     TabDB = createTabButton(DebugFrame, "PartyDB", 10, -28)
     TabInsp = createTabButton(DebugFrame, "INSP 观察", 138, -28)
     TabAsset = createTabButton(DebugFrame, "素材浏览", 266, -28)
+    TabMem = createTabButton(DebugFrame, "内存记录", 394, -28)
     TabDB:SetScript("OnClick", function() showPanel("db") end)
     TabInsp:SetScript("OnClick", function() showPanel("insp") end)
     TabAsset:SetScript("OnClick", function() showPanel("asset") end)
+    TabMem:SetScript("OnClick", function()
+        showPanel("mem")
+        mppe.Debug.MemViewTop(true)   -- 进页先回到顶部（最新一条在第一行）
+    end)
 
     -- 内容面板（无白边框，透明边缘）
     local _backdrop = {
@@ -695,6 +895,47 @@ local function initDebugFrame()
     AssetPanel:SetPoint("TOPLEFT", DbPanel, "TOPLEFT")
     AssetPanel:SetPoint("BOTTOMRIGHT", DbPanel, "BOTTOMRIGHT")
     AssetPanel:SetBackdrop(_backdrop)
+
+    -- ==================================================
+    -- 内存记录面板：开关按钮 + 清空 + 状态行 + 记录列表
+    -- ==================================================
+    MemPanel = CreateFrame("Frame", "MPPE_DebugMem_Panel", DebugFrame, "BackdropTemplate")
+    MemPanel:SetPoint("TOPLEFT", DbPanel, "TOPLEFT")
+    MemPanel:SetPoint("BOTTOMRIGHT", DbPanel, "BOTTOMRIGHT")
+    MemPanel:SetBackdrop(_backdrop)
+    MemPanel:Hide()
+
+    local _memHeader = MemPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    _memHeader:SetPoint("TOPLEFT", MemPanel, "TOPLEFT", 8, -6)
+    _memHeader:SetText("内存记录（最新在上 · 本插件总量 Blizzard 归属记账）")
+
+    MemToggleBtn = CreateFrame("Button", nil, MemPanel, "UIPanelButtonTemplate")
+    MemToggleBtn:SetSize(88, 22)
+    MemToggleBtn:SetPoint("TOPRIGHT", MemPanel, "TOPRIGHT", -100, -4)
+    MemToggleBtn:SetText("开始记录")
+    MemToggleBtn:SetScript("OnClick", function() mppe.Debug.MemRecord(not MemRecording) end)
+
+    local _memClearBtn = CreateFrame("Button", nil, MemPanel, "UIPanelButtonTemplate")
+    _memClearBtn:SetSize(56, 22)
+    _memClearBtn:SetPoint("TOPRIGHT", MemPanel, "TOPRIGHT", -8, -4)
+    _memClearBtn:SetText("清空")
+    _memClearBtn:SetScript("OnClick", function() mppe.Debug.MemClear() end)
+
+    MemStatusText = MemPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    MemStatusText:SetPoint("TOPLEFT", MemPanel, "TOPLEFT", 8, -30)
+    MemStatusText:SetText("未开始记录")
+
+    MemScrollFrame = CreateFrame("ScrollFrame", "MPPE_DebugMem_Scroll", MemPanel, "ScrollFrameTemplate")
+    MemScrollFrame:SetPoint("TOPLEFT", MemPanel, "TOPLEFT", 6, -52)
+    MemScrollFrame:SetPoint("BOTTOMRIGHT", MemPanel, "BOTTOMRIGHT", -6, 6)
+    MemScrollFrame:EnableMouseWheel(true)
+    -- 这个页面的记录会很长，保留滚动条（与其它页隐藏滚动条不同）
+    MemScrollFrame.ScrollBar:SetHideIfUnscrollable(false)
+
+    MemScrollChild = CreateFrame("Frame", "MPPE_DebugMem_ScrollChild", MemScrollFrame)
+    MemScrollFrame:SetScrollChild(MemScrollChild)
+    MemScrollChild:SetWidth(DebugScrollWidth)
+    MemScrollChild:SetHeight(1)
 
     -- ==================================================
     -- DB 面板：标题 + 刷新按钮 + 滚动树
