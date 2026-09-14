@@ -9,6 +9,7 @@ local ADDON_NAME, mppe = ...
 -- 常用接口（冒号调用）：
 --   filter:Passes(level, mapID, classFile)   -- 筛选谓词
 --   filter:HasActive() / filter:NeedsClass() / filter:Refresh() / filter:Reset() / filter:SetShown(bool)
+-- 鼠标交互：左键 = 打开菜单选择；右键 = 只把被点的那个下拉恢复默认值（其余 3 个不受影响）
 -- 职责边界：本模块只管“公会”钥石筛选；队伍钥石属于 Party* 系列
 -- ==================================================================
 mppe.GuildKeystoneFilterBar = mppe.GuildKeystoneFilterBar or {}
@@ -84,6 +85,58 @@ local function setupDropdownBackground(dropdown)
     dropdown:HookScript("OnMouseDown", refreshDropdownBackground)
     dropdown:HookScript("OnMouseUp", refreshDropdownBackground)
     dropdown:HookScript("OnShow", refreshDropdownBackground)
+end
+
+-- 右键重置：右键点某个下拉 = 只恢复它自己那一项的默认值（左键 / 悬停 / 滚轮完全不受影响）
+-- 三个实测要点（2026-09-14）：
+--   ① 模板只登记了左键，只补 RightButtonUp 拿不到任何右键事件（右键按下没登记 → 没有鼠标焦点），必须登记 RightButtonDown；
+--   ② 模板的 OnMouseDown_Intrinsic 不判按钮，右键会弹菜单；而覆盖该 intrinsic 无效（C 侧直接调模板 mixin 的方法），
+--      所以改覆盖 OpenMenu —— 模板内部是纯 Lua 方法调用（self:SetMenuOpen → self:OpenMenu），实例覆盖有效；
+--   ③ RegisterForMouse 属保护函数族，战斗中不装（避免 ADDON_ACTION_BLOCKED），先排队、脱战后自动补装。
+local _pendingReset = {}      -- 战斗中排队等补装：[1..n] = { dropdown = ..., resetFunc = ... }
+local _pendingFrame           -- 脱战补装的监听帧（只建一次）
+
+-- 给下拉装右键重置（脱战补装会递归回到本函数）
+local function setupRightClickReset(dropdown, resetFunc)
+    if dropdown.mppeRightClickInstalled then return end   -- 已装过：不重复装
+
+    -- 取模板的 OpenMenu；取不到说明模板实现变了，宁可不装也不能弄坏“左键开菜单”
+    local _originOpenMenu = dropdown.OpenMenu
+    if not _originOpenMenu then return end
+
+    -- 战斗中：先排队，等脱战补装
+    if InCombatLockdown() then
+        _pendingReset[#_pendingReset + 1] = { dropdown = dropdown, resetFunc = resetFunc }
+
+        if not _pendingFrame then
+            _pendingFrame = CreateFrame("Frame")
+            _pendingFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+            _pendingFrame:SetScript("OnEvent", function()
+                if InCombatLockdown() then return end   -- 还没真正脱战：等下次事件再补
+
+                local _list = _pendingReset
+                _pendingReset = {}
+                for _index = 1, #_list do
+                    setupRightClickReset(_list[_index].dropdown, _list[_index].resetFunc)
+                end
+            end)
+        end
+        return
+    end
+
+    -- 补登右键（左键必须原样写回：该接口是替换式注册，漏了左键会点不开下拉）
+    dropdown:RegisterForMouse("LeftButtonDown", "LeftButtonUp", "RightButtonDown", "RightButtonUp")
+
+    -- 只拦“右键那一刻的开菜单”，其余（左键 / 悬停 / 滚轮）原样转调模板逻辑
+    dropdown.OpenMenu = function(self, ...)
+        if IsMouseButtonDown("RightButton") then
+            resetFunc()
+            return
+        end
+        return _originOpenMenu(self, ...)
+    end
+
+    dropdown.mppeRightClickInstalled = true
 end
 
 -- 创建一个筛选器行实例（opts: parent 必填 / namePrefix / onChange / levelMinDefault / levelMaxDefault）
@@ -280,6 +333,14 @@ function GuildFilterBar.Create(opts)
         end
     end)
 
+    -- 右键重置：恢复“不限职业”（只清掉职业这一项）
+    setupRightClickReset(_classDropdown, function()
+        if _classFilterCount == 0 then return end   -- 本来就是默认值：不白重建一次列表
+        wipe(_classFilter)
+        _classFilterCount = 0
+        notifyChanged()
+    end)
+
     -- ---------- B：最低钥石层数（0-29，与 C 联动；按钮直接显示数字）----------
     local _levelOptions = {}
     for _level = 0, LEVEL_RANGE_MAX do
@@ -303,6 +364,15 @@ function GuildFilterBar.Create(opts)
             end
             rootDescription:CreateHighlightRadio(_option.text, isSelected, setSelected, _option)
         end
+    end)
+
+    -- 右键重置：恢复默认下限（0 = 不限制下限；只动下限这一项）
+    setupRightClickReset(_levelMinDropdown, function()
+        local _defaultMin = opts.levelMinDefault or LEVEL_MIN_DEFAULT
+        if _levelMin == _defaultMin then return end
+        _levelMin = _defaultMin
+        if _levelMin > _levelMax then _levelMax = _levelMin end   -- 与菜单联动一致：下限不能高于上限
+        notifyChanged()
     end)
 
     -- B/C 之间的区间连接符「-」：跟在 B 右侧，表示 B 是最小值、C 是最大值
@@ -334,6 +404,15 @@ function GuildFilterBar.Create(opts)
         end
     end)
 
+    -- 右键重置：恢复默认上限（29 = 不限制上限；只动上限这一项）
+    setupRightClickReset(_levelMaxDropdown, function()
+        local _defaultMax = opts.levelMaxDefault or LEVEL_MAX_DEFAULT
+        if _levelMax == _defaultMax then return end
+        _levelMax = _defaultMax
+        if _levelMax < _levelMin then _levelMin = _levelMax end   -- 与菜单联动一致：上限不能低于下限
+        notifyChanged()
+    end)
+
     -- ---------- D：副本（多选，完整副本名）----------
     local _mapDropdown = createDropdown(_namePrefix.."_Map", MAP_WIDTH, _levelMaxDropdown)
     _mapDropdown:SetDefaultText(DUNGEON_LABEL)
@@ -361,6 +440,14 @@ function GuildFilterBar.Create(opts)
             end
             rootDescription:CreateCheckbox(_option.text, isChecked, setChecked, _option)
         end
+    end)
+
+    -- 右键重置：恢复“不限副本”（只清掉副本这一项）
+    setupRightClickReset(_mapDropdown, function()
+        if _mapFilterCount == 0 then return end   -- 本来就是默认值：不白重建一次列表
+        wipe(_mapFilter)
+        _mapFilterCount = 0
+        notifyChanged()
     end)
 
     -- 顺序 A / B / C / D（组内从左到右，整组由宿主摆放容器位置）
