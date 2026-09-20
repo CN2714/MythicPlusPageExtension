@@ -18,13 +18,15 @@ mppe.FieldMeta = {
     best   = { srcKey = "bestSrc",   tsKey = "bestUpdated", fields = { "runs", "score" } },
 }
 
--- 来源优先级（高→低）：MPPE 自报最高，INSP 观察次之，LOR/LKS/AKS 兜底
+-- 来源优先级（高→低）：MPPE > LKS > AKS > LOR > INSP
+-- 注意：MergeEngine 的判定是「新来源优先级 < 旧来源时才拒绝写入」，优先级相等会互相覆盖（谁后到谁赢），
+--       所以 LKS 必须严格高于 AKS，否则滞后的 AKS 会盖掉 LKS 的新钥石
 mppe.SourcePriority = {
-    class  = { MPPE = 3, INSP = 2, LOR = 1 },
-    specId = { MPPE = 3, INSP = 2, LOR = 1 },
-    iLv    = { MPPE = 3, INSP = 2, LOR = 1 },
-    ks     = { MPPE = 3, LKS = 2, AKS = 2 , LOR = 1 },
-    best   = { MPPE = 3, INSP = 2 },
+    class  = { MPPE = 5, LOR = 3, INSP = 2 },
+    specId = { MPPE = 5, LOR = 3, INSP = 2 },
+    iLv    = { MPPE = 5, LOR = 3, INSP = 2 },
+    ks     = { MPPE = 5, LKS = 4, AKS = 3, LOR = 2 },
+    best   = { MPPE = 5, LOR = 3, INSP = 2 },   -- LOR 的 RatingUpdate 已接入（LOR_RatingCallback），优先于 INSP 观察
 }
 
 -- 从队伍解析纯名对应的真实全名（跨服队友用其真实服务器，同服回退当前服；解析不到返回 nil）

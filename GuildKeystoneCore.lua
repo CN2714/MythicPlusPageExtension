@@ -206,9 +206,36 @@ if libKeystone then
 end
 
 if libOpenRaid then
+    -- LOR 的 KeystoneUpdate 同时承载「队伍」与「公会」两个来源的数据（库内都以玩家名回调，不带频道信息），
+    -- 而 LKS 那条路径能直接看 channel。这里必须自己分辨：队友若不同公会，其钥石不该进公会缓存
+    -- （缓存以纯名为 key，跨服同名会串数据）。非队伍成员时只可能是公会数据，直接收下。
+
+    -- 该单位是否与自己同公会（拿不到公会名视为不同）
+    local function _isSameGuildUnit(unit)
+        if not unit or not UnitExists(unit) then return false end
+        local _myGuild = GetGuildInfo("player")
+        if not _myGuild or _myGuild == "" then return false end
+        return GetGuildInfo(unit) == _myGuild
+    end
+
+    -- 该纯名是否可以写入公会缓存
+    local function _acceptGuildKeystone(pureName)
+        if not pureName then return false end
+        -- 自己：同公会（自己必然与自己在同一公会）才收
+        if pureName == UnitName("player") then return _isSameGuildUnit("player") end
+        -- 队友：同公会才收（不同公会的队友属于队伍数据，由 PartyDB 那条路径负责）
+        for _i = 1, GetNumSubgroupMembers() do
+            local _unit = "party".._i
+            if UnitName(_unit) == pureName then return _isSameGuildUnit(_unit) end
+        end
+        -- 既不是自己也不是队友：只可能是公会频道来的数据
+        return true
+    end
+
     local _openRaidCallback = {}
     function _openRaidCallback.OnKeystoneUpdate(unitName, keystoneInfo)
         if type(keystoneInfo) ~= "table" then return end
+        if not _acceptGuildKeystone(GuildKS.PureName(unitName)) then return end
 
         -- mythicPlusMapID 供 C_ChallengeMode.GetMapUIInfo 取副本名；challengeMapID 兜底
         local _level = rawget(keystoneInfo, "level") or 0

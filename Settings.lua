@@ -725,11 +725,11 @@ local function BuildComboBox(parent, item, itemName, leftmargin, tabHeight)
     return tabHeight + _title:GetHeight() + 10
 end
 
--- 构建"下拉框"设置项 V3（完全自实现，不依赖 Settings 全局方法；仅用 Menu 框架通用 API 还原原生设置下拉观感）
+-- 构建"下拉框"设置项 V2（完全自实现，不依赖 Settings 全局方法；仅用 Menu 框架通用 API 还原原生设置下拉观感）
 local function BuildComboBoxV2(parent, item, itemName, leftmargin, tabHeight)
     local _title = CreateItemTitle(parent, itemName, leftmargin, -tabHeight, SETTINGS_COLUMN_WIDTH - leftmargin)
     -- 原生设置下拉使用 WowStyle2DropdownTemplate（common-dropdown-c-button 深色按钮，悬停显示箭头）
-    local _comboBox = CreateFrame("DropdownButton", "MPPE_Setting_"..item.db.."_V3", parent, "WowStyle2DropdownTemplate")
+    local _comboBox = CreateFrame("DropdownButton", "MPPE_Setting_"..item.db.."_V2", parent, "WowStyle2DropdownTemplate")
     _comboBox:SetSize(205, 24)
     _comboBox:SetPoint("LEFT", _title, "RIGHT", 5, 0)
 
