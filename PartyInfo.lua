@@ -2,6 +2,7 @@
 local ADDON_NAME, mppe = ...
 local pe = mppe.PartyEvent
 
+-- 清空框架内容：子框架/区域全部隐藏并剥离到 UIParent，避免下一次重建时重叠
 local function ClearFrameContents(frame)
     if not frame then return end
     
@@ -43,7 +44,7 @@ local function ClearFrameContents(frame)
     end
 end
 
--- 缓存函数：创建一个能快速补齐特定ID列表的函数
+-- 按本赛季副本列表补齐记录（缺失的补 0 值）并排序，同时返回 list / map 两个视图
 local function MythicRunsDunFiller(runs)
     local existingMap = {}
     for _, item in ipairs(runs) do
@@ -68,8 +69,7 @@ local function MythicRunsDunFiller(runs)
         if a.bestRunDurationMS ~= b.bestRunDurationMS then return a.bestRunLevel < b.bestRunLevel end
         -- 3. 按 finishedSuccess 降序 (true > false)
         if a.finishedSuccess ~= b.finishedSuccess then
-            -- 注意：在Lua中，true > false 的比较需要特殊处理
-            -- 将布尔值转换为数字比较 (true=1, false=0)
+            -- 布尔转数字比较（Lua 里 true > false 不成立）
             local aSuccess = a.finishedSuccess and 1 or 0
             local bSuccess = b.finishedSuccess and 1 or 0
             return aSuccess > bSuccess
@@ -81,6 +81,7 @@ local function MythicRunsDunFiller(runs)
     return runsList, runsMap
 end
 
+-- 毫秒 →「分:秒.十分位」（例：754500 → "12:34.5"）
 local function FormatKSTime(ms)
     if type(ms) ~= "number" or ms <= 0 then return "0:00.000" end
     local totalSeconds = ms / 1000
@@ -89,43 +90,82 @@ local function FormatKSTime(ms)
     return string.format("%d:%04.1f", minutes, seconds)
 end
 
-local function GeneratePlayerRunsInfo(name, realm, score, hexColor, runsList)
-    if type(runsList) ~= "table" then return "" end
-
-    local textParts = {}
-    table.insert(textParts, string.format("|c%s%s(%s)|r - %s\n", hexColor, name, realm, mppe.Translate['Person Best M+ Records']))
-    table.insert(textParts, string.format("%s|c%s%s|r\n\n", mppe.Translate['SeasonRating:'], mppe.GetColorByScore(score or 0, MythicPlusPageExtensionDB.PartyKeyStone_ScoreColorStyle, true), score or 0))
-    
-    for i,r in pairs(runsList) do
-        local l = string.format("|c%s%s|r", r.finishedSuccess and "ff00ff00" or "ffff0000", (r.bestRunLevel and r.bestRunLevel > 0) and string.format("%02d",r.bestRunLevel) or "    ")--"|c00707070N/A|r")
-        local d = mppe.Dungeons[r.challengeModeID] and mppe.Translate[mppe.Dungeons[r.challengeModeID].Name] or "UNKNOWN"
-        local s = r.mapScore > 0 and r.mapScore or string.format("|c00707070%s|r", mppe.Translate['No Record'])
-        local t = string.format("|c%s%s|r", r.finishedSuccess and "ff00ff00" or "ffff0000", r.bestRunDurationMS > 0 and string.format("(%s)", FormatKSTime(r.bestRunDurationMS)) or "")
-        -- 12 圣焰隐修院 123(12:34.5)
-        local _text = string.format("%s |c00ffffff%s|r|T:0:0|t%s %s\n", l, d, s, t)        
-        table.insert(textParts, _text)
-    end
-    return table.concat(textParts, "")
+-- 副本名称：优先用客户端 API 的本地化全称（如「艾拉-卡拉，回响之城」），拿不到时退回本地化短名
+local function GetDungeonName(dungeonId)
+    local _entry = type(dungeonId) == "number" and mppe.Dungeons and mppe.Dungeons[dungeonId]
+    if not _entry then return "UNKNOWN" end
+    local _fullName = C_ChallengeMode.GetMapUIInfo(dungeonId)
+    if _fullName and _fullName ~= "" then return _fullName end
+    return (mppe.Translate and mppe.Translate[_entry.Name]) or _entry.Name or "UNKNOWN"
 end
 
-local function GenerateDungeonRunsInfo(memberList, dungeonId)
-    if type(memberList) ~= "table" or not dungeonId or dungeonId == 0 then return "" end
-    local d = mppe.Dungeons[dungeonId] and mppe.Translate[mppe.Dungeons[dungeonId].Name] or "UNKNOWN"
-    local textParts = {}
-    table.insert(textParts, string.format("%s - %s\n\n", d, mppe.Translate['Dungeon Best M+ Records']))
+local function GeneratePlayerRunsRows(name, realm, score, hexColor, runsList)
+    if type(runsList) ~= "table" then return nil end
+
+    -- 行结构：left = 左列（左对齐），right = 右列（右对齐）；right 为 nil 时该行只占左列
+    local _rows = {}
+    table.insert(_rows, { left = string.format("|c%s%s(%s)|r - %s", hexColor, name, realm, mppe.Translate['Person Best M+ Records']) })
+    table.insert(_rows, { left = string.format("%s|c%s%s|r", mppe.Translate['SeasonRating:'], mppe.GetColorByScore(score or 0, MythicPlusPageExtensionDB.PartyKeyStone_ScoreColorStyle, true), score or 0) })
+    table.insert(_rows, { left = " " })   -- 空行：分隔标题与记录列表
+
+    for i, r in pairs(runsList) do
+        -- 左列：层数 + 副本名（层数固定两位、数字等宽 → 副本名天然成列）
+        local _lv = (r.bestRunLevel and r.bestRunLevel > 0) and string.format("%02d", r.bestRunLevel) or "00"
+        local _lvText = string.format("|c%s%s|r", r.finishedSuccess and "ff00ff00" or "ffff0000", _lv)
+        local _dunName = GetDungeonName(r.challengeModeID)
+        -- 右列：分数 + 时长（时长随是否完成着色；无记录用灰色 No Record）
+        -- 分数保持「无色」写法（与旧版一致）：它是行内唯一不带色码的数值，不要写死白色
+        local _scoreText = r.mapScore > 0 and tostring(r.mapScore) or string.format("|c00707070%s|r", mppe.Translate['No Record'])
+        local _timeText = (r.bestRunDurationMS or 0) > 0 and string.format("|c%s(%s)|r", r.finishedSuccess and "ff00ff00" or "ffff0000", FormatKSTime(r.bestRunDurationMS)) or ""
+        table.insert(_rows, {
+            left  = string.format("%s |c00ffffff%s|r", _lvText, _dunName),
+            right = (_timeText ~= "") and string.format("%s %s", _scoreText, _timeText) or _scoreText,
+        })
+    end
+    return _rows
+end
+
+local function GenerateDungeonRunsRows(memberList, dungeonId)
+    if type(memberList) ~= "table" or not dungeonId or dungeonId == 0 then return nil end
+    local _dunName = GetDungeonName(dungeonId)
+    -- 行结构：left = 左列（层数 + 玩家名），right = 右列（分数 + 时长）
+    local _rows = {}
+    table.insert(_rows, { left = string.format("%s - %s", _dunName, mppe.Translate['Dungeon Best M+ Records']) })
+    table.insert(_rows, { left = " " })   -- 空行：分隔标题与记录列表
     for i, m in ipairs(memberList) do
-        local r = m.runsMap[dungeonId]
-        if r then
-        local l = string.format("|c%s%s|r", r.finishedSuccess and "ff00ff00" or "ffff0000", (r.bestRunLevel and r.bestRunLevel > 0) and string.format("%02d",r.bestRunLevel) or "    ")
-        local n = string.format("|c%s%s(%s)|r", m.hexColor, m.name, m.realm)
-        local s = r.mapScore > 0 and r.mapScore or string.format("|c00707070%s|r", mppe.Translate['No Record'])
-        local t = string.format("|c%s%s|r", r.finishedSuccess and "ff00ff00" or "ffff0000", r.bestRunDurationMS > 0 and string.format("(%s)", FormatKSTime(r.bestRunDurationMS)) or "")
-        -- 12 张三(白银之手) 123(12:34.5)
-        local _text = string.format("%s |c00ffffff%s|r|T:0:0|t%s %s\n", l, n, s, t)       
-        table.insert(textParts, _text)
+        local _r = m.runsMap[dungeonId]
+        if _r then
+            local _lv = (_r.bestRunLevel and _r.bestRunLevel > 0) and string.format("%02d", _r.bestRunLevel) or "00"
+            local _lvText = string.format("|c%s%s|r", _r.finishedSuccess and "ff00ff00" or "ffff0000", _lv)
+            local _nameText = string.format("|c%s%s(%s)|r", m.hexColor, m.name, m.realm)
+            local _scoreText = _r.mapScore > 0 and tostring(_r.mapScore) or string.format("|c00707070%s|r", mppe.Translate['No Record'])
+            local _timeText = (_r.bestRunDurationMS or 0) > 0 and string.format("|c%s(%s)|r", _r.finishedSuccess and "ff00ff00" or "ffff0000", FormatKSTime(_r.bestRunDurationMS)) or ""
+            table.insert(_rows, {
+                left  = string.format("%s %s", _lvText, _nameText),
+                right = (_timeText ~= "") and string.format("%s %s", _scoreText, _timeText) or _scoreText,
+            })
         end
     end
-    return table.concat(textParts, "")
+    return _rows
+end
+
+-- 渲染「两列工具提示」：left 左对齐、right 右对齐
+-- AddDoubleLine 是 GameTooltip 的原生两列 API：右列自动贴住右边缘，tooltip 宽度按最宽的行自适应 → 跨行的右列天然成列
+-- 刻意不改字体、也不传颜色参数：一律使用 tooltip 自己的默认字体与默认文字色
+--（GameTooltip 是共享帧，字体/颜色改动都会残留给物品、法术等其它 tooltip，所以这里不碰）
+local function ShowRowsTooltip(owner, rows)
+    if type(rows) ~= "table" or #rows == 0 then return end
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    -- AddLine / AddDoubleLine 是累加语义：构建前显式清空，避免重复 OnEnter 叠加多份内容
+    GameTooltip:ClearLines()
+    for _i, _row in ipairs(rows) do
+        if _row.right and _row.right ~= "" then
+            GameTooltip:AddDoubleLine(_row.left, _row.right)
+        else
+            GameTooltip:AddLine(_row.left)
+        end
+    end
+    GameTooltip:Show()
 end
 
 local function GeneratePartyInfoV2()  
@@ -149,6 +189,7 @@ local function GeneratePartyInfoV2()
 
     local PartyInfoFrame = _G["mppePartyInfoFrame"] or CreateFrame("Frame" ,"mppePartyInfoFrame", ChallengesFrame)
     ClearFrameContents(PartyInfoFrame) -- 关键：每次运行都先清空
+    GameTooltip:Hide()                 -- 重建行会销毁 FontString（不触发 OnLeave），先把可能悬着的 tooltip 收掉
     PartyInfoFrame:SetSize(MythicPlusPageExtensionDB.PartyInfo_Width and MythicPlusPageExtensionDB.PartyInfo_Width or 265, 135)
     PartyInfoFrame:SetPoint("BOTTOMRIGHT", ChallengesFrame, "BOTTOMRIGHT", -10 + xoffset, 75 + yoffset)
     PartyInfoFrame:Show() -- 确保显示
@@ -160,7 +201,6 @@ local function GeneratePartyInfoV2()
     local pif_title = PartyInfoFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     pif_title:SetPoint("TOPLEFT", 5, -5)
     pif_title:SetText(mppe.Translate['PartyInfo'])
-    --pif_title:SetFont("GameFontNormal", 50, "OUTLINE")
     pif_title:SetFont(ChatFontNormal:GetFont(), 15, "OUTLINE")
 
     local pif_lfgTitle = PartyInfoFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -184,10 +224,8 @@ local function GeneratePartyInfoV2()
     pif_line:SetAtlas("spec-dividerline", false)
     pif_line:SetPoint("TOP", PartyInfoFrame, "TOP", 0, -22)
 
-    --local _
     local _pMember = {}
     for i = 1, pCount do
-        --print(tostring(time()).."^^^"..tostring(i)..":"..tostring(pCount))
         local _name, _realm 
         if mppe.Mine.Name == nil then mppe.Mine.Name = UnitName("Player") end
         if mppe.Mine.Realm == nil then mppe.Mine.Realm = GetRealmName() end
@@ -222,17 +260,15 @@ local function GeneratePartyInfoV2()
             party:SetPoint("TOP",pif_Member[i-1],"BOTTOM", 0, 0)
         end
 
-        -- 添加高亮背景
+        -- 高亮背景（引用计数：鼠标在行内子元素间移动会 OnLeave/OnEnter 交错，直接 Show/Hide 会闪）
         local highlight = party:CreateTexture(nil, "BACKGROUND")
         highlight:SetAllPoints(party)
-        highlight:SetColorTexture(1, 1, 1, 0.1) -- 半透明白色
+        highlight:SetColorTexture(1, 1, 1, 0.1)
         highlight:Hide()
         party.highlight = highlight
         
-        -- 鼠标计数器
         party.mouseOverCount = 0
         
-        -- 函数：增加鼠标计数并显示高亮
         local function AddMouseOver(self)
             self.mouseOverCount = self.mouseOverCount + 1
             if self.mouseOverCount == 1 then
@@ -240,7 +276,6 @@ local function GeneratePartyInfoV2()
             end
         end
         
-        -- 函数：减少鼠标计数并可能隐藏高亮
         local function RemoveMouseOver(self)
             self.mouseOverCount = math.max(0, self.mouseOverCount - 1)
             if self.mouseOverCount == 0 then
@@ -252,36 +287,22 @@ local function GeneratePartyInfoV2()
         _p.ksLv = tonumber(_p.ksLv)
         if type(_p.ksId) ~= "number" then _p.ksId = 0 end
         if type(_p.ksLv) ~= "number" then _p.ksLv = 0 end
-        party.pRecordTooltip = GeneratePlayerRunsInfo(_p.name, _p.realm, _p.score, _p.hexColor, _p.runsList)
-        party.dRecordTooltip = GenerateDungeonRunsInfo(_pMember, _p.ksId)
-        --print(_p.spec)
+        -- 记录行改为「左列=层数+副本 / 右列=分数+时长」的两列结构（由 ShowRowsTooltip 渲染）
+        party.pRecordRows = GeneratePlayerRunsRows(_p.name, _p.realm, _p.score, _p.hexColor, _p.runsList)
+        party.dRecordRows = GenerateDungeonRunsRows(_pMember, _p.ksId)
         local _, _specName, _, _pIconId, _specRole, _, _className = GetSpecializationInfoByID(_p.spec or 0)
 
-        -- 1. 缓存职业数据（只取一次，避免重复 mppe.ClassSpec[_p.class]）
+        -- 1. 职业数据（只取一次）
         local classData = _p.class and mppe.ClassSpec[_p.class]
 
-        -- 2. 关键字段 nil 检查（各打印一次，不会重复刷屏）
-        if not _p.class or not _p.spec then
-            _p.class = select(2, UnitClass(_p.fullName))           
-            if not _p.class then 
-                --print("MPPE ERROR : _p.class nil")
-                _p.class = select(2, UnitClass(_p.fullName))
-            end
-            if not _p.spec then 
-                --print("MPPE ERROR : _p.spec nil")
-            end
-            --mppe.DebugPrint(_p)
-        end
+        -- 2. 关键字段兜底：缓存里没有时再从单位读一次
+        if not _p.class then _p.class = select(2, UnitClass(_p.fullName)) end
 
         -- 3. 获取专精数据（优先具体专精，其次通用专精[0]）
         local specData
         if classData then
             if _p.spec ~= nil then specData = classData[_p.spec] or classData[0]
             else specData = classData[0] end
-
-            --print((_p.class or "NOTFOUND").."："..classData[0].icon)
-        else 
-            --print((_p.class or "NOTFOUND").."：NOclassData")
         end
 
         -- 4. 用 specData 安全填充 _specName 和 _pIconId（保留 GetSpecializationInfoByID 的真实结果）
@@ -359,11 +380,7 @@ local function GeneratePartyInfoV2()
         pName:SetTextColor(mppe.ColorHexToRGBA(_p.hexColor))
         pName:SetScript("OnEnter", function(self)
             AddMouseOver(self:GetParent())
-            if self:GetParent().pRecordTooltip then
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:AddLine(self:GetParent().pRecordTooltip)
-                GameTooltip:Show()
-            end
+            ShowRowsTooltip(self, self:GetParent().pRecordRows)
         end)
         pName:SetScript("OnLeave", function(self)
             RemoveMouseOver(self:GetParent())
@@ -394,18 +411,13 @@ local function GeneratePartyInfoV2()
         end
         pKs:SetScript("OnEnter", function(self)
             AddMouseOver(self:GetParent())
-            if self:GetParent().dRecordTooltip and self:GetParent().dRecordTooltip ~= "" then
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetText(self:GetParent().dRecordTooltip)
-                GameTooltip:Show()
-            end
+            ShowRowsTooltip(self, self:GetParent().dRecordRows)
         end)
         pKs:SetScript("OnLeave", function(self) 
             RemoveMouseOver(self:GetParent())
             GameTooltip:Hide()
         end)
         
-        -- 父框架的鼠标事件
         party:SetScript("OnEnter", function(self)
             AddMouseOver(self)
         end)
@@ -419,18 +431,8 @@ local function GeneratePartyInfoV2()
     PartyInfoFrame.Member = pif_Member
 end
 
--- 刷新/初始化小队信息框架
--- 需要防止重复触发
--- function mppe.RefreshPartyInfo()
---     if MythicPlusPageExtensionDB.PartyKeyStone_Enable then
---         -- 设置 ShowPartyInfo
---         if PVEFrame:IsShown() and ChallengesFrame then
---             C_Timer.After(0.05, function() GeneratePartyInfoV2() end)
---         end
---     end
--- end
+-- 刷新/初始化小队信息框架（防重入：执行中收到新请求则标记，跑完再补一次）
 function mppe.RefreshPartyInfo(source)
-    -- if source then print(source) end
     if not MythicPlusPageExtensionDB.PartyKeyStone_Enable then return end
     if not (PVEFrame:IsShown() and ChallengesFrame) then return end
     
