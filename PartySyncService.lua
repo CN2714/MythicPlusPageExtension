@@ -376,8 +376,10 @@ function PartySyncService:GetInspectItemLevel(unit)
             local _link = GetInventoryItemLink(unit, _slot)
             if _link then
                 -- 物品信息未缓存（有链接但取不到装等）：标记本次计算不完整，整体返回 0 等重试
-                -- GetItemInfo 调用同时取装等(itemLevel)/物品类ID(itemClassID)/子类ID(itemSubClassID)
-                local _, _, _, _iLv, _, _, _, _, _, _, _classID, _subClassID = GetItemInfo(_link)
+                -- C_Item.GetItemInfo 一次调用同时取装等(itemLevel=第4位)/物品类ID(classID=第12位)/子类ID(subclassID=第13位)
+                -- 必须用 C_Item 命名空间：全局 GetItemInfo 已废弃移除，直接调用会因 nil 报错
+                -- 占位符个数必须补齐到 12 个，少一个会把第11位 sellPrice 当成 classID、把 classID 当成 subclassID
+                local _, _, _, _iLv, _, _, _, _, _, _, _, _classID, _subClassID = C_Item.GetItemInfo(_link)
                 -- 装等为 0 也视为未就绪（Lua 中 0 为真值，原 if not _iLv 拦不住 0，会导致 _total 静默少算而平均失真）
                 if not _iLv or _iLv == 0 then _bUncached = true end
                 --[0] = 'Axe1H', [4] = 'Mace1H', [7] = 'Sword1H', [9] = 'Warglaive', [13] = 'Unarmed', [15] = 'Dagger', [19] = 'Wand'
